@@ -4,7 +4,7 @@ import { csvClassPoints, csvResults } from './csv.js';
 import { button, competitorPanel, currentEventPicker, divisionPicker, icon, inspector, moduleList, operations, pager, rosterPicker, rosterTools } from './control-views.js';
 import { createRanking } from './ranking.js';
 import { createMeetDesk, raceActions } from './meet-control.js';
-import { classStandings, finalFor, topRows } from './meet-program.js';
+import { classStandings, finalFor, onProgram, topRows } from './meet-program.js';
 import { GRADES, MODULES, activeEvent, applicable, clamp, clockPhase, clockValue, eventRound, eventTitle, formatTime, jumpHeight, moduleBounds, nextJumpHeight, sameProject } from './sport.js';
 
 const $ = (selector) => document.querySelector(selector);
@@ -17,6 +17,7 @@ const rosterView = { page: 0, limit: 4 };
 const regionMarkup = new WeakMap();
 let state;
 let currentPhase;
+let switchingFocus = false;
 let renderedEventId;
 let renderedRosterId;
 let preparedId = '';
@@ -158,7 +159,7 @@ function renderRoster(now = client.now()) {
   const event = rosterEvent();
   if (event?.id !== renderedRosterId) rosterView.page = 0;
   renderedRosterId = event?.id;
-  updateRegion('#prep-event-picker', rosterPicker(state.events, state.activeEventId, preparedId));
+  updateRegion('#prep-event-picker', rosterPicker(state.events.filter(onProgram), state.activeEventId, preparedId));
   const total = Math.max(1, Math.ceil((event?.competitors.length ?? 0) / rosterView.limit));
   rosterView.page = clamp(rosterView.page, 0, total - 1);
   const stagedJump = event?.schedule?.project === 'high-jump' && event.id !== state.activeEventId;
@@ -187,6 +188,12 @@ function renderLayers(event) {
 
 function render() {
   const event = activeEvent(state);
+  const program = state.events.filter(onProgram);
+  if (!switchingFocus && program.length && event && !onProgram(event)) {
+    switchingFocus = true;
+    void run('event:select', { eventId: program[0].id }).finally(() => { switchingFocus = false; });
+    return;
+  }
   if (renderedEventId !== state.activeEventId) {
     renderedEventId = state.activeEventId;
     layoutDirty = false;
@@ -195,8 +202,9 @@ function render() {
   if (!applicable(layoutKey, event)) { layoutKey = 'brand'; layoutDirty = false; }
   const now = client.now();
   currentPhase = event ? clockPhase(event, now) : null;
-  updateRegion('#event-divisions', divisionPicker(state.events, state.activeEventId));
-  updateRegion('#active-event-picker', currentEventPicker(state.events, state.activeEventId));
+  const listed = program.length ? program : state.events;
+  updateRegion('#event-divisions', divisionPicker(listed, state.activeEventId));
+  updateRegion('#active-event-picker', currentEventPicker(listed, state.activeEventId));
   $('#edit-active').disabled = !event;
   updateRegion('#operations', operations(event, now));
   renderRoster(now);

@@ -67,9 +67,10 @@ export function initialState(demo = false) {
   if (demo) {
     events.find(({ id }) => id === REHEARSAL_RACE).competitors = ['林浩宇', '陈子航', '陆晨曦', '吴思远', '苏乐扬', '张铭轩', '周予安', '韩东辰']
       .map((name, i) => ({ id: `demo-${i + 1}`, name, lane: i + 1, bib: String(101 + i), team: `${i + 1}班`, time: null, attempts: [], status: 'pending', heat: 1 }));
-    events.find(({ id }) => id === REHEARSAL_LONG_JUMP).competitors = [
-      { id: 'demo-jumper', name: '示例选手', lane: 1, bib: '501', team: '1班', time: null, attempts: [519, 'X', 536], status: 'ok' },
-    ];
+    // 跳远彩排名单先不用，长距离示例只留 1000 米。
+    // events.find(({ id }) => id === REHEARSAL_LONG_JUMP).competitors = [
+    //   { id: 'demo-jumper', name: '示例选手', lane: 1, bib: '501', team: '1班', time: null, attempts: [519, 'X', 536], status: 'ok' },
+    // ];
   }
   return { version: 5, revision: 0, activeEventId: demo ? REHEARSAL_RACE : events[0].id, events, standby: defaultGraphics() };
 }

@@ -192,7 +192,7 @@ export function competitorPanel(event, now, { start, limit, onAir }) {
 }
 
 export function moduleList(state, event) {
-  return Object.entries(MODULES).filter(([key]) => !['results', 'teams'].includes(key) && applicable(key, event)).map(([key, meta]) => {
+  return Object.entries(MODULES).filter(([key]) => !['results', 'teams', 'score'].includes(key) && applicable(key, event)).map(([key, meta]) => {
     const live = state.modules[key].visible;
     const toggle = button(live ? '隐藏' : '显示', { action: 'module-toggle', key, accessible: `${live ? '隐藏' : '显示'}${meta.title}`, small: true, pressed: live, variant: 'tally-button' });
     const total = ['lineup', 'results'].includes(key) ? paginatedCount(event, key) : 1;

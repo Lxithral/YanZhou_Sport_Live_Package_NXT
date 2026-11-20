@@ -1,9 +1,9 @@
 import { SportsClient, demo, escapeHtml as h } from './client.js';
 import {
-  GRADES, MODULES, PAGE_SIZE, PHASES, activeEvent, applicable, checkpoints, clamp, clockPhase, clockValue, formatTime, heats,
-  eventTitle, lineupRoster, moduleBounds, modulePosition, paginatedCount, periodTitle, resultRows, resultText,
+  GRADES, LINEUP_SIZE, MODULES, PHASES, activeEvent, applicable, checkpoints, clamp, clockPhase, clockValue, formatTime, heats,
+  eventTitle, lineupRoster, moduleBounds, modulePosition, paginatedCount, standings,
 } from './sport.js';
-import { FESTIVAL_NAME } from './meet-program.js';
+import { className } from './meet-program.js';
 
 const stage = document.querySelector('#stage');
 const preview = window.parent !== window && new URLSearchParams(location.search).get('preview') === '1';
@@ -35,7 +35,59 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
+const LANE_WORDS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
+const runner = `<svg class="runner-mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="42" cy="14" r="5.5"/><path d="M16 31c7-3 12-1 16 4l5 5 9-3M30 35l-9 9m10-3 3 15m7-18 8 5-3 11"/></svg>`;
+
+function laneLabel(lane) {
+  if (!lane) return '—';
+  const word = LANE_WORDS[lane];
+  return word ? `${word}道` : `${lane}道`;
+}
+
+function bibLabel(bib) {
+  const value = String(bib || '').trim();
+  return /^\d+$/.test(value) ? value.padStart(4, '0') : (value || '—');
+}
+
+function broadcastTitle(event) {
+  const grade = event.schedule?.grade;
+  const gradeLabel = grade && grade !== 'staff' ? GRADES[grade] : '';
+  const division = event.division === 'men' ? '男子' : event.division === 'women' ? '女子' : '';
+  const name = event.name.replace(/\s+/g, '');
+  const stage = (event.stage || '').replace(/男子|女子/g, '');
+  return `${gradeLabel}${division}${name}${stage}`;
+}
+
+function teamLabel(event, athlete) {
+  if (!event.schedule?.grade || event.schedule.grade === 'staff') return athlete.team || '—';
+  return className(event, athlete) || '—';
+}
+
+function lineupGraphic(event) {
+  const page = state.pages.lineup;
+  const rows = lineupRoster(event);
+  const part = rows.slice(page * LINEUP_SIZE, (page + 1) * LINEUP_SIZE);
+  const pages = paginatedCount(event, 'lineup');
+  return `<div class="lane-card">
+    <header><span class="lane-mark">${runner}</span><h2>${h(broadcastTitle(event))}</h2>${seal}</header>
+    <div class="lane-columns"><span>道序</span><span>号码</span><span>班级</span><span>姓名</span></div>
+    ${part.map((athlete) => `<div class="lane-row"><b>${h(laneLabel(athlete.lane))}</b><span>${h(bibLabel(athlete.bib))}</span><span>${h(teamLabel(event, athlete))}</span><strong>${h(athlete.name)}</strong></div>`).join('') || '<p class="lane-empty">等待参赛名单</p>'}
+    ${pages > 1 ? `<footer>${page + 1} / ${pages}</footer>` : ''}
+  </div>`;
+}
+
+function championGraphic(event) {
+  const winner = standings(event).find((row) => row.rank === 1);
+  const detail = winner ? [winner.athlete.lane ? laneLabel(winner.athlete.lane) : '', teamLabel(event, winner.athlete), winner.athlete.name].filter(Boolean).join('  ') : '';
+  return `<div class="champion-card">
+    <header><small>ATHLETICS</small><strong>${h(broadcastTitle(event))}</strong><em>CHAMPION</em></header>
+    ${winner ? `<div class="champion-row"><b>1</b><span>${h(detail)}</span></div>` : '<p class="champion-empty">等待冠军</p>'}
+  </div>`;
+}
+
+/*
 function tableGraphic(key, event) {
+  // 完整成绩榜、比分和分页名单先不用。参赛名单改走 lineupGraphic，名次只留冠军。
   if (event.kind === 'match') return `<div class="table-board match-result">
     <header><span>${h(eventTitle(event))}</span><strong>比赛比分</strong></header>
     <div class="match-result-score"><b>${h(event.homeName)}</b><strong>${event.score.home} : ${event.score.away}</strong><b>${h(event.awayName)}</b></div>
@@ -61,6 +113,7 @@ function classGraphic(event) {
     ${rows.map(({ rank, team, records, total, tied }) => `<div class="board-row"><strong>${rank}</strong><b>${h(team)}${tied ? ' · 待抽签' : ''}</b><span>${records}</span><strong>${total}</strong></div>`).join('') || '<div class="board-empty">等待决赛计分</div>'}
     <footer><span>${h(state.meet.title)}</span><span>团体前八</span></footer></div>`;
 }
+*/
 
 function sportsGraphic(key, event) {
   switch (key) {
@@ -82,11 +135,10 @@ function sportsGraphic(key, event) {
         last ? `通过 ${last.distance} m · 剩 ${remaining} m` : (points.length > 1 ? `首个通过点 ${points[0]} m` : '');
       return `<div class="time-ribbon"><div class="time-label">计时 / <span data-phase></span></div><div class="time-number" data-time></div>${progress ? `<div class="time-progress">${h(progress)}</div>` : ''}</div>`;
     }
-    case 'score': return `<div class="score-ribbon"><div class="score-team"><span>${h(event.homeName)}</span><b>${event.score.home}</b></div>
-      <div class="score-time"><span>${h(periodTitle(event))}</span><b data-time></b></div><div class="score-team score-team--away"><span>${h(event.awayName)}</span><b>${event.score.away}</b></div></div>`;
-    case 'lineup':
-    case 'results': return tableGraphic(key, event);
-    case 'teams': return classGraphic(event);
+    // case 'score': 球赛记分牌先不用。
+    // case 'teams': 班级积分榜先不用。
+    case 'lineup': return lineupGraphic(event);
+    case 'results': return championGraphic(event);
     case 'athlete': return `<div class="athlete-ribbon">${state.athlete.tag ? `<small>${h(state.athlete.tag)}</small>` : ''}<div><strong>${h(state.athlete.name)}</strong><span>${h(state.athlete.detail)}</span></div></div>`;
     case 'notice': return `<div class="notice-ribbon"><b>${h(state.notice.title)}</b><span>${h(state.notice.body)}</span></div>`;
     default: return '';

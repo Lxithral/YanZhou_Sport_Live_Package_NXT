@@ -136,13 +136,14 @@ test('legacy shared graphics migrate to the live event and female events retain 
   assert.equal(migrated.events[0].graphics.modules.results.visible, false);
   assert.equal(migrated.events[0].graphics.notice.body, '');
   assert.equal(migrated.events.filter((event) => !event.schedule && event.division === 'women' && event.name === '铅球').length, 1);
-  assert.ok(migrated.events.some((event) => event.division === 'men' && event.name === '铅球'));
-  assert.equal(migrated.events.filter((event) => event.schedule && event.distance === 1500).length, 4);
+  assert.equal(migrated.events.filter((event) => event.schedule && event.name === '铅球').length, 0);
+  assert.equal(migrated.events.filter((event) => event.schedule && event.distance === 800).length, 4);
+  assert.equal(migrated.events.filter((event) => event.schedule && event.distance === 1000).length, 2);
 });
 
 test('CSV field import keeps valid, skipped, and invalid attempts together', () => {
   const app = session();
-  app.send('event:select', { eventId: 'school-g1-men-long-jump-final' });
+  app.send('event:save', { fields: PRESETS['long-jump'] });
   const source = '\uFEFF道次,号码,姓名,单位,试次\r\n1,001,甲,"蓝,班",5.0|X|5.32\r\n2,002,乙,二班,-|X\r\n';
   app.send('athlete:import', { rows: readCsv(source) });
   const [first, second] = app.event.competitors;

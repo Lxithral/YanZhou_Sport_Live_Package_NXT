@@ -1,5 +1,6 @@
 export const CANVAS = { width: 1920, height: 1080 };
 export const PAGE_SIZE = 6;
+export const LINEUP_SIZE = 7;
 export const MAX_TIME = 24 * 60 * 60 * 1000;
 export const MAX_COMPETITORS = 128;
 
@@ -8,8 +9,8 @@ export const MODULES = {
   event:   { title: '赛事条', icon: 'list', x: 48, y: 931, w: 680, h: 112, visible: true },
   clock:   { title: '计时牌', icon: 'timer', x: 1472, y: 34, w: 400, h: 160, visible: true, kind: 'track' },
   score:   { title: '球赛记分牌', icon: 'score', x: 1212, y: 34, w: 660, h: 144, visible: true, kind: 'match' },
-  lineup:  { title: '参赛名单', icon: 'people', x: 436, y: 254, w: 1048, h: 534, visible: false },
-  results: { title: '成绩榜', icon: 'chart', x: 436, y: 254, w: 1048, h: 534, visible: false },
+  lineup:  { title: '参赛名单', icon: 'people', x: 530, y: 150, w: 860, h: 680, visible: false },
+  results: { title: '冠军', icon: 'chart', x: 560, y: 380, w: 800, h: 250, visible: false },
   teams:   { title: '班级积分', icon: 'chart', x: 436, y: 220, w: 1048, h: 636, visible: false },
   athlete: { title: '人物条', icon: 'person', x: 48, y: 813, w: 670, h: 104, visible: false },
   notice:  { title: '公告', icon: 'notice', x: 752, y: 925, w: 1120, h: 122, visible: false },
@@ -241,7 +242,8 @@ export function resultRows(event) {
 export function paginatedCount(event, key) {
   if (event.kind === 'match') return 1;
   const count = key === 'results' ? resultRows(event).length : lineupRoster(event).length;
-  return Math.max(1, Math.ceil(count / PAGE_SIZE));
+  const size = key === 'lineup' ? LINEUP_SIZE : PAGE_SIZE;
+  return Math.max(1, Math.ceil(count / size));
 }
 
 export function eventTitle(event) {

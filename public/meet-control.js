@@ -1,6 +1,6 @@
 import { escapeHtml as h } from './client.js';
 import { button, options, pager } from './control-views.js';
-import { AWARD_LIMIT, FESTIVAL_NAME, canScore, checkInTime, classStandings, compareSchedule, finalFor, scheduleSession, schoolRecord, topRows } from './meet-program.js';
+import { AWARD_LIMIT, FESTIVAL_NAME, canScore, checkInTime, classStandings, compareSchedule, finalFor, onProgram, scheduleSession, schoolRecord, topRows } from './meet-program.js';
 import { DIVISIONS, GRADES, activeEvent, clamp, eventTitle, formatMark, formatTime } from './sport.js';
 
 export function raceActions(state, event) {
@@ -12,7 +12,7 @@ export function raceActions(state, event) {
   const timing = start ? `${start.slice(5, 10).replace('-', '/')} ${start.slice(11)} · 检录 ${checkInTime(start)}` : (event.schedule.session || '比赛时间待定');
   return `<span class="meet-details">${h(timing)}${record === null ? '' : ` · 校纪录 ${event.kind === 'field' ? formatMark(record) : formatTime(record)}`}</span>
     ${target ? button('晋级到决赛', { action: 'qualify', glyph: 'right', small: true, disabled: !hasRanks || !!target.competitors.length }) : ''}
-    ${canScore(event) ? button(event.schedule.scored ? '撤回计分' : '确认计分', { action: 'points-confirm', glyph: 'check', small: true, variant: event.schedule.scored ? '' : 'capture', disabled: !hasRanks }) : ''}`;
+    <!-- 班级计分先不用：${canScore(event) ? button(event.schedule.scored ? '撤回计分' : '确认计分', { action: 'points-confirm', glyph: 'check', small: true, variant: event.schedule.scored ? '' : 'capture', disabled: !hasRanks }) : ''} -->`;
 }
 
 export function createMeetDesk({ getState, updateRegion }) {
@@ -28,7 +28,7 @@ export function createMeetDesk({ getState, updateRegion }) {
   const pageLimit = () => innerHeight <= 620 ? 3 : (innerWidth <= 580 ? 5 : 8);
 
   function renderSchedule(state) {
-    const ordered = state.events.filter((event) => event.schedule).sort(compareSchedule);
+    const ordered = state.events.filter((event) => event.schedule && onProgram(event)).sort(compareSchedule);
     const sessions = [...new Set(ordered.map((event) => scheduleSession(event.schedule)))];
     if (!sessions.includes(session)) session = '';
     updateRegion('#schedule-session', options({ '': '全部时段', ...Object.fromEntries(sessions.map((label) => [label, label])) }, session));
