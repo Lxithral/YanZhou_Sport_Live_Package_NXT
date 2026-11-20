@@ -1,0 +1,282 @@
+export const CANVAS = { width: 1920, height: 1080 };
+export const PAGE_SIZE = 6;
+export const MAX_TIME = 24 * 60 * 60 * 1000;
+export const MAX_COMPETITORS = 128;
+
+export const MODULES = {
+  brand:   { title: 'Logo 挂角', icon: 'image', x: 48, y: 34, w: 609, h: 118, visible: true },
+  event:   { title: '赛事条', icon: 'list', x: 48, y: 931, w: 680, h: 112, visible: true },
+  clock:   { title: '计时牌', icon: 'timer', x: 1472, y: 34, w: 400, h: 160, visible: true, kind: 'track' },
+  score:   { title: '球赛记分牌', icon: 'score', x: 1212, y: 34, w: 660, h: 144, visible: true, kind: 'match' },
+  lineup:  { title: '参赛名单', icon: 'people', x: 436, y: 254, w: 1048, h: 534, visible: false },
+  results: { title: '成绩榜', icon: 'chart', x: 436, y: 254, w: 1048, h: 534, visible: false },
+  teams:   { title: '班级积分', icon: 'chart', x: 436, y: 220, w: 1048, h: 636, visible: false },
+  athlete: { title: '人物条', icon: 'person', x: 48, y: 813, w: 670, h: 104, visible: false },
+  notice:  { title: '公告', icon: 'notice', x: 752, y: 925, w: 1120, h: 122, visible: false },
+};
+
+export const KINDS = { track: '径赛', field: '田赛', match: '球赛', ranking: '团体' };
+export const DIVISIONS = { men: '男子', women: '女子', open: '公开' };
+export const GRADES = { g1: '高一', g2: '高二', staff: '教职工' };
+const GENDER_WORD = /男子|女子|男生|女生|男组|女组/u;
+export const PHASES = { ready: '待发', running: '计时中', paused: '已暂停', finished: '已结束' };
+export const RESULT_STATUS = { pending: '待录入', ok: '有效', DNS: '未出发', DNF: '未完成', DQ: '取消资格', NM: '无有效成绩' };
+export const MOTIONS = { none: '无', fade: '淡入淡出', slide: '下方滑入', side: '左侧滑入', zoom: '缩放' };
+
+export const PRESETS = {
+  'run-1000': { name: '1000 米', kind: 'track', distance: 1000, trackLength: 400, legs: 1 },
+  'run-800': { name: '800 米', kind: 'track', distance: 800, trackLength: 400, legs: 1 },
+  'run-100': { name: '100 米', kind: 'track', distance: 100, trackLength: 400, legs: 1 },
+  'run-50': { name: '50 米', kind: 'track', distance: 50, trackLength: 400, legs: 1 },
+  'run-200': { name: '200 米', kind: 'track', distance: 200, trackLength: 400, legs: 1 },
+  'run-400': { name: '400 米', kind: 'track', distance: 400, trackLength: 400, legs: 1 },
+  'run-1500': { name: '1500 米', kind: 'track', distance: 1500, trackLength: 400, legs: 1 },
+  'relay-100': { name: '4×100 米接力', kind: 'track', distance: 400, trackLength: 400, legs: 4 },
+  'relay-400': { name: '4×400 米接力', kind: 'track', distance: 1600, trackLength: 400, legs: 4 },
+  'shuttle-50': { name: '50 米迎面接力', kind: 'track', distance: 500, trackLength: 400, legs: 10 },
+  'long-jump': { name: '跳远', kind: 'field' },
+  'high-jump': { name: '跳高', kind: 'field' },
+  'shot-put': { name: '铅球', kind: 'field' },
+  'staff-teams': { name: '教职工团体赛', kind: 'ranking' },
+  football: { name: '足球', kind: 'match', homeName: '主队', awayName: '客队', clockMode: 'up', periodMinutes: 45, periodLabel: '半场' },
+};
+
+export function blankClock() {
+  return { phase: 'ready', elapsed: 0, startedAt: null };
+}
+
+export function elapsedTime(clock, now) {
+  return Math.min(MAX_TIME, clock.elapsed + (clock.startedAt === null ? 0 : Math.max(0, now - clock.startedAt)));
+}
+
+export function clockValue(event, now) {
+  const elapsed = elapsedTime(event.clock, now);
+  return event.kind === 'match' && event.clockMode === 'down'
+    ? Math.max(0, event.periodMinutes * 60000 - elapsed)
+    : elapsed;
+}
+
+export function clockPhase(event, now) {
+  if (event.clock.phase === 'running' &&
+      (elapsedTime(event.clock, now) === MAX_TIME || (event.kind === 'match' && event.clockMode === 'down' && clockValue(event, now) === 0))) {
+    return 'finished';
+  }
+  return event.clock.phase;
+}
+
+export function formatTime(ms, fractions = true, roundUp = false) {
+  const centiseconds = Math.max(0, Math.floor(ms / 10));
+  const seconds = fractions ? Math.floor(centiseconds / 100) : (roundUp ? Math.ceil(ms / 1000) : Math.floor(ms / 1000));
+  const pad = (n) => String(n).padStart(2, '0');
+  const minutes = Math.floor(seconds / 60);
+  const time = `${pad(minutes)}:${pad(seconds % 60)}`;
+  return fractions ? `${time}.${pad(centiseconds % 100)}` : time;
+}
+
+export function parseTime(source) {
+  const value = String(source).trim();
+  if (!/^(?:\d{1,4}:[0-5]\d|\d{1,5})(?:\.\d{1,2})?$/.test(value)) {
+    throw new Error('请输入秒数或 分:秒.百分秒，例如 12.35 或 03:21.52。');
+  }
+  const parts = value.split(':');
+  const seconds = Number(parts.pop()) + (parts.length ? Number(parts[0]) * 60 : 0);
+  const ms = Math.round(seconds * 100) * 10;
+  if (ms > MAX_TIME) throw new Error('时长不能超过 24 小时。');
+  return ms;
+}
+
+export function parseMark(raw) {
+  const value = String(raw).trim().replace(/\s*(?:m|米)$/i, '');
+  if (!/^\d{1,3}(?:\.\d{1,2})?$/.test(value) || Number(value) === 0) {
+    throw new Error('请输入大于 0 的米数，最多两位小数，例如 5.32。');
+  }
+  return Math.round(Number(value) * 100);
+}
+
+export function formatMark(cm) {
+  return `${(cm / 100).toFixed(2)} m`;
+}
+
+export function checkpoints(event) {
+  if (event.kind !== 'track') return [];
+  if (event.legs > 1) return Array.from({ length: event.legs }, (_, i) => (i + 1) * event.distance / event.legs);
+  const first = event.distance % event.trackLength || event.trackLength;
+  const distances = [];
+  for (let distance = first; distance <= event.distance; distance += event.trackLength) distances.push(distance);
+  return distances;
+}
+
+export function activeEvent(state) {
+  return state.events.find((event) => event.id === state.activeEventId);
+}
+
+export function applicable(key, event) {
+  if (key === 'teams') return ['g1', 'g2'].includes(event?.schedule?.grade);
+  if (!event) return ['brand', 'athlete', 'notice'].includes(key);
+  if (key === 'lineup' && event?.kind === 'match') return false;
+  return !MODULES[key].kind || MODULES[key].kind === event?.kind;
+}
+
+export function moduleBounds(key, scale) {
+  const { w, h } = MODULES[key];
+  return { x: CANVAS.width - Math.ceil(w * scale / 100), y: CANVAS.height - Math.ceil(h * scale / 100) };
+}
+
+export function modulePosition(key, { x, y, scale }) {
+  const bounds = moduleBounds(key, scale);
+  return { x: clamp(x, 0, bounds.x), y: clamp(y, 0, bounds.y) };
+}
+
+export function moduleScaleLimit(key) {
+  const { w, h } = MODULES[key];
+  return Math.min(180, Math.floor(100 * Math.min(CANVAS.width / w, CANVAS.height / h)));
+}
+
+export function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function defaultLayout(key) {
+  const { visible, x, y } = MODULES[key];
+  return { visible, x, y, scale: 100, opacity: 100, enter: 'fade', exit: 'fade', duration: 260 };
+}
+
+export function resultValue(athlete, event) {
+  if (athlete.status !== 'ok') return null;
+  if (event.kind !== 'field') return athlete.time;
+  const clears = athlete.jumps?.filter(({ outcome }) => outcome === 'O').map(({ height }) => height) ?? [];
+  return Math.max(0, ...athlete.attempts.filter(Number.isInteger), ...clears) || null;
+}
+
+export function resultText(athlete, event) {
+  const value = resultValue(athlete, event);
+  if (value !== null) return event.kind === 'field' ? formatMark(value) : formatTime(value);
+  return athlete.status === 'pending' ? '—' : athlete.status;
+}
+
+export function roster(event) {
+  return [...event.competitors].sort((a, b) => (a.heat ?? 1) - (b.heat ?? 1) || (a.lane || Infinity) - (b.lane || Infinity));
+}
+
+export function heats(event) {
+  return [...new Set([event.heat ?? 1, 1, ...event.competitors.map((athlete) => athlete.heat ?? 1)])].sort((a, b) => a - b);
+}
+
+export function lineupRoster(event) {
+  const rows = roster(event);
+  return event.kind === 'track' ? rows.filter((athlete) => (athlete.heat ?? 1) === (event.heat ?? 1)) : rows;
+}
+
+export function jumpHeight(event) {
+  return event.barHeight ?? (event.division === 'women' ? 95 : 130);
+}
+
+export function nextJumpHeight(event) {
+  const height = jumpHeight(event);
+  return height + (height < (event.division === 'women' ? 115 : 150) ? 5 : 3);
+}
+
+export function jumpFailures(athlete) {
+  let failures = 0;
+  for (const { outcome } of (athlete.jumps ?? []).toReversed()) {
+    if (outcome === 'O') break;
+    if (outcome === 'X') failures++;
+  }
+  return failures;
+}
+
+export function canJump(event, athlete) {
+  const jumps = athlete.jumps ?? [];
+  const bar = jumpHeight(event);
+  const last = jumps.at(-1);
+  return canRank(athlete) && jumpFailures(athlete) < 3 && (!last || bar > last.height || (bar === last.height && last.outcome === 'X'));
+}
+
+export function relayRegistration(athlete) {
+  if (athlete.boys == null || athlete.girls == null) return '待核验';
+  return athlete.boys === 5 && athlete.girls === 5 ? '5 男 / 5 女' : '人数不符';
+}
+
+function compareMarks(a, b, event) {
+  if (a.value !== b.value) return (a.value - b.value) * (event.kind === 'field' ? -1 : 1);
+  if (event.schedule?.project !== 'high-jump') return 0;
+  const faults = ({ athlete, value }) => {
+    const jumps = athlete.jumps ?? [];
+    if (!jumps.some(({ height, outcome }) => height === value && outcome === 'O')) return [Infinity, Infinity];
+    const misses = jumps.filter(({ height, outcome }) => outcome === 'X' && height <= value);
+    return [misses.filter(({ height }) => height === value).length, misses.length];
+  };
+  const first = faults(a);
+  const second = faults(b);
+  return first[0] - second[0] || first[1] - second[1] || 0;
+}
+
+export function canRank(athlete) {
+  return athlete.status === 'ok' || athlete.status === 'pending';
+}
+
+export function standings(event) {
+  const rows = roster(event).map((athlete) => ({ athlete, value: resultValue(athlete, event), rank: null }));
+  if (event.rankOrder) {
+    const places = new Map(event.rankOrder.map((id, index) => [id, index + 1]));
+    for (const row of rows) row.rank = places.get(row.athlete.id) ?? null;
+    return rows.sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
+  }
+  rows.sort((a, b) => {
+    if (a.value !== null && b.value !== null) return compareMarks(a, b, event);
+    if (a.value !== null) return -1;
+    if (b.value !== null) return 1;
+    return Number(a.athlete.status === 'pending') - Number(b.athlete.status === 'pending');
+  });
+  rows.forEach((row, i) => {
+    if (row.value !== null) row.rank = i && compareMarks(rows[i - 1], row, event) === 0 ? rows[i - 1].rank : i + 1;
+  });
+  return rows;
+}
+
+export function resultRows(event) {
+  return standings(event).filter(({ athlete, rank }) => rank !== null || !canRank(athlete));
+}
+
+export function paginatedCount(event, key) {
+  if (event.kind === 'match') return 1;
+  const count = key === 'results' ? resultRows(event).length : lineupRoster(event).length;
+  return Math.max(1, Math.ceil(count / PAGE_SIZE));
+}
+
+export function eventTitle(event) {
+  const grade = event.schedule?.grade;
+  return [event.name, grade === 'staff' ? '' : GRADES[grade], eventStage(event)].filter(Boolean).join(' · ');
+}
+
+export function inferDivision(...labels) {
+  for (const label of labels) {
+    if (/混合|混双|公开/u.test(label)) return 'open';
+    const group = GENDER_WORD.exec(label)?.[0];
+    if (group) return group.startsWith('男') ? 'men' : 'women';
+  }
+  return 'open';
+}
+
+export function eventRound(stage) {
+  return stage.replace(GENDER_WORD, '').trim();
+}
+
+function projectName(name) {
+  return name.replace(GENDER_WORD, '').replace(/\s/g, '').replace(/^(\d+)米$/u, '$1m').toLowerCase();
+}
+
+export function sameProject(first, second) {
+  return first.kind === second.kind && projectName(first.name) === projectName(second.name);
+}
+
+export function eventStage({ division, stage }) {
+  if (division !== 'men' && division !== 'women') return stage;
+  const label = DIVISIONS[division];
+  return GENDER_WORD.test(stage) ? stage.replace(GENDER_WORD, label) : label + stage;
+}
+
+export function periodTitle(event) {
+  if (event.periodLabel === '半场') return ['上半场', '下半场'][event.score.period - 1] || `加时 ${event.score.period - 2}`;
+  return `第 ${event.score.period} ${event.periodLabel}`;
+}
