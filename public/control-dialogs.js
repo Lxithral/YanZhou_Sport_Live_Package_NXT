@@ -221,6 +221,7 @@ export class Dialogs {
     this.show('直播信息',
       `<p class="form-note">${event ? h(eventTitle(event)) + ' · ' : ''}OBS 浏览器来源 · 1920 × 1080</p>
       ${input('输出地址', 'output', overlayUrl, 'readonly')}
+      <p class="form-note">把该地址添加为 OBS「浏览器」来源，并放在摄像机来源上方。画面空白处会透出底层摄像画面。</p>
       ${input('榜单页脚', 'title', state.meet.title, 'maxlength="20" required')}
       ${input('挂角副标题', 'subtitle', state.meet.subtitle, 'maxlength="24"')}
       ${input('画面强调色', 'accent', state.meet.accent, 'type="color" required')}`, submitButton('保存直播信息'),

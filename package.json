@@ -1,6 +1,6 @@
 {
   "name": "yanzhou-sport-live-package-nxt",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "type": "module",
   "description": "烟洲体育直播包装，现场导播台和 OBS 透明图层",

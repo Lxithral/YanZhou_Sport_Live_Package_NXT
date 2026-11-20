@@ -1,11 +1,12 @@
 import { SportsClient, demo, escapeHtml as h } from './client.js';
 import {
-  GRADES, LINEUP_SIZE, MODULES, PHASES, activeEvent, applicable, checkpoints, clamp, clockPhase, clockValue, formatTime, heats,
+  CANVAS, GRADES, LINEUP_SIZE, MODULES, PHASES, SAFE_AREA, activeEvent, applicable, checkpoints, clamp, clockPhase, clockValue, formatTime, heats,
   eventTitle, lineupRoster, moduleBounds, modulePosition, paginatedCount, standings,
 } from './sport.js';
 import { className } from './meet-program.js';
 
 const stage = document.querySelector('#stage');
+for (const [name, inset] of Object.entries(SAFE_AREA)) stage.style.setProperty(`--safe-${name}`, `${inset}px`);
 const preview = window.parent !== window && new URLSearchParams(location.search).get('preview') === '1';
 const layers = {};
 const seal = '<img class="school-seal" src="/assets/yanzhou-seal.png" alt="">';
@@ -29,7 +30,7 @@ for (const key of Object.keys(MODULES)) {
 if (demo) stage.insertAdjacentHTML('beforeend', '<div class="rehearsal-mark">彩排</div>');
 
 function resize() {
-  ratio = Math.min(innerWidth / 1920, innerHeight / 1080);
+  ratio = Math.min(innerWidth / CANVAS.width, innerHeight / CANVAS.height);
   stage.style.transform = `translate(-50%, -50%) scale(${ratio})`;
 }
 window.addEventListener('resize', resize);
@@ -235,10 +236,8 @@ function updateTime() {
 requestAnimationFrame(updateTime);
 
 if (preview) {
-  document.body.dataset.backdrop = 'track';
   window.addEventListener('message', ({ source, origin, data }) => {
     if (origin !== location.origin || source !== window.parent || data?.type !== 'preview:settings') return;
-    document.body.dataset.backdrop = ['track', 'grid', 'dark'].includes(data.backdrop) ? data.backdrop : 'track';
     stage.classList.toggle('guides', data.guides === true);
     editKey = Object.hasOwn(layers, data.editKey) ? data.editKey : '';
     layerSelection();

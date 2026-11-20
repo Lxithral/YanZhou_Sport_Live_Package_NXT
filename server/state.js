@@ -8,6 +8,8 @@ import { AWARD_LIMIT, SCHOOL_RACES, canScore, className, classStandings, finalFo
 
 const LEGACY_PRESET_IDS = new Set(['run-1000', 'run-800', 'run-100', 'relay-100', 'long-jump', 'shot-put', 'run-1500']
   .flatMap((id) => [id, `${id}-women`]));
+const LEGACY_DEFAULT_ORIGINS = { brand: [48, 34], event: [48, 931], clock: [1472, 34], score: [1212, 34], athlete: [48, 813], notice: [752, 925] };
+const STATE_VERSION = 6;
 const REHEARSAL_RACE = 'school-g1-men-run-1000-final';
 const REHEARSAL_LONG_JUMP = 'school-g1-men-long-jump-final';
 const REHEARSAL_TARGETS = new Map([['run-1000', REHEARSAL_RACE], ['long-jump', REHEARSAL_LONG_JUMP]]);
@@ -72,7 +74,7 @@ export function initialState(demo = false) {
     //   { id: 'demo-jumper', name: '示例选手', lane: 1, bib: '501', team: '1班', time: null, attempts: [519, 'X', 536], status: 'ok' },
     // ];
   }
-  return { version: 5, revision: 0, activeEventId: demo ? REHEARSAL_RACE : events[0].id, events, standby: defaultGraphics() };
+  return { version: STATE_VERSION, revision: 0, activeEventId: demo ? REHEARSAL_RACE : events[0].id, events, standby: defaultGraphics() };
 }
 
 function validGraphics(config, version) {
@@ -99,7 +101,7 @@ function validClock(clock) {
 }
 
 export function verifyState(value) {
-  requireThat(object(value) && [1, 2, 3, 4, 5].includes(value.version) && Number.isSafeInteger(value.revision) && value.revision >= 0 &&
+  requireThat(object(value) && Number.isInteger(value.version) && value.version >= 1 && value.version <= STATE_VERSION && Number.isSafeInteger(value.revision) && value.revision >= 0 &&
     validGraphics(value.version >= 3 ? value.standby : value, value.version) && Array.isArray(value.events) &&
     value.events.length <= (value.version >= 4 ? MAX_EVENTS : 96), '设置文件格式不正确。');
   const ids = new Set();
@@ -165,8 +167,7 @@ function hasRaceData(event) {
   return event.competitors.length > 0 || event.clock.phase !== 'ready' || event.clock.elapsed !== 0 || event.splits.length > 0 || Boolean(event.heatRuns);
 }
 
-export function migrateState(state) {
-  if (state.version === 5) return state;
+function migrateSchoolEvents(state) {
   const { events, standby, activeEventId } = state.version >= 3 ? state : migrateLegacyGraphics(state);
   let updated = events.filter((event) => event.schedule || !LEGACY_PRESET_IDS.has(event.id) || hasRaceData(event));
   let outputSettings = standby;
@@ -190,7 +191,28 @@ export function migrateState(state) {
   }
   const selection = updated.find(({ id }) => id === selectionId) ?? updated.find((event) => event.schedule) ?? updated[0];
   const selected = selection?.id ?? null;
-  return { version: 5, revision: state.revision + 1, events: updated, activeEventId: selected, standby: outputSettings };
+  return { events: updated, activeEventId: selected, standby: outputSettings };
+}
+
+function migrateDefaultPositions(graphics) {
+  const modules = { ...graphics.modules };
+  for (const [key, [oldX, oldY]] of Object.entries(LEGACY_DEFAULT_ORIGINS)) {
+    const layout = modules[key];
+    if (layout.x !== oldX || layout.y !== oldY || layout.scale !== 100) continue;
+    const { x, y, scale } = defaultLayout(key);
+    modules[key] = { ...layout, x, y, scale };
+  }
+  return { ...graphics, modules };
+}
+
+export function migrateState(state) {
+  if (state.version === STATE_VERSION) return state;
+  const { events, activeEventId, standby } = state.version < 5 ? migrateSchoolEvents(state) : state;
+  return {
+    version: STATE_VERSION, revision: state.revision + 1, activeEventId,
+    events: events.map((event) => ({ ...event, graphics: migrateDefaultPositions(event.graphics) })),
+    standby: migrateDefaultPositions(standby),
+  };
 }
 
 export function clientState(state, onAir) {

@@ -1,10 +1,8 @@
 
 :root { font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; color: #fff8ee; }
 * { box-sizing: border-box; }
-html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; }
-body[data-backdrop="track"] { background: #162d32 url('/assets/track-preview.png') center center / cover no-repeat; }
-body[data-backdrop="dark"] { background: #242529; }
-body[data-backdrop="grid"] { background: repeating-conic-gradient(#3c3839 0% 25%, #2d2a2d 0% 50%) 0 0 / 32px 32px; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+html, body, #stage { background: transparent !important; }
 #stage {
   position: absolute;
   top: 50%;
@@ -22,7 +20,7 @@ body[data-backdrop="grid"] { background: repeating-conic-gradient(#3c3839 0% 25%
   --ink: #561e24;
   --seal: url('/assets/yanzhou-seal.png');
 }
-#stage.guides::after { content: ''; position: absolute; inset: 54px 96px; border: 2px dashed #fff9; box-shadow: 0 0 0 1px #1b131c66; pointer-events: none; z-index: 3; }
+#stage.guides::after { content: ''; position: absolute; inset: var(--safe-y) var(--safe-x); border: 2px dashed #fff9; box-shadow: 0 0 0 1px #1b131c66; pointer-events: none; z-index: 3; }
 .layer { position: absolute; transform-origin: top left; pointer-events: none; }
 .layer[hidden] { display: none; }
 .layer.is-editable { pointer-events: auto; cursor: move; outline: 4px dashed #edbc83; outline-offset: 8px; touch-action: none; z-index: 4; }
@@ -187,7 +185,7 @@ body[data-backdrop="grid"] { background: repeating-conic-gradient(#3c3839 0% 25%
 .notice-ribbon { display: grid; grid-template-columns: minmax(100px, max-content) minmax(0,1fr); align-items: stretch; min-height: 91px; overflow: hidden; border: 2px solid #85605a; border-top: 5px solid var(--accent); border-radius: 6px; background: var(--paper-light); color: var(--ink); }
 .notice-ribbon b { display: flex; align-items: center; padding: 10px 15px; max-width: 245px; background: var(--wine); color: var(--paper-light); font-size: 30px; }
 .notice-ribbon span { align-self: center; margin: 10px 16px; font-size: 27px; line-height: 1.27; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.rehearsal-mark { position: absolute; right: 48px; bottom: 34px; border: 2px solid #d7b795; border-radius: 4px; background: #3b221ee8; color: #f9e4c6; padding: 5px 21px; font-size: 28px; font-weight: 730; z-index: 5; }
+.rehearsal-mark { position: absolute; right: calc(var(--safe-x) + var(--safe-padding)); bottom: calc(var(--safe-y) + var(--safe-padding)); border: 2px solid #d7b795; border-radius: 4px; background: #3b221ee8; color: #f9e4c6; padding: 5px 21px; font-size: 28px; font-weight: 730; z-index: 5; }
 
 .lane-card, .champion-card { overflow: hidden; border-radius: 18px; box-shadow: 0 14px 34px #0c23401f; font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif; }
 .lane-card { background: #fff; color: #1b4f86; }
