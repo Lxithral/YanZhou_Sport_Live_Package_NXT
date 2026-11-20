@@ -228,7 +228,11 @@ input[type=number]::-webkit-inner-spin-button { opacity: 1; }
 .check-field { display: flex; align-items: center; gap: 3px; color: var(--muted); font-size: 11px; white-space: nowrap; cursor: pointer; }
 .check-field input { accent-color: var(--accent); margin: 0; }
 .monitor-body { margin: 6px auto; width: min(var(--preview-cap), calc(100% - 12px)); aspect-ratio: 16 / 9; border-radius: 5px; overflow: hidden; background: var(--well); }
-.monitor iframe { display: block; width: 100%; height: 100%; border: 0; }
+.monitor-body[data-backdrop="grid"] { background: repeating-conic-gradient(#3c3839 0% 25%, #2d2a2d 0% 50%) 0 0 / 32px 32px; }
+.monitor-body[data-backdrop="dark"] { background: #242529; }
+.monitor-body[data-backdrop="track"] { background: #162d32 url('/assets/track-preview.png') center center / cover no-repeat; }
+/* Match the overlay document's color scheme so the iframe canvas stays transparent. */
+.monitor iframe { display: block; width: 100%; height: 100%; border: 0; color-scheme: normal; }
 .layer-count { font-size: 11px; color: var(--accent-text); }
 #layer-controls, .layout-inspector { display: grid; gap: 6px; padding: 6px 7px 7px; }
 .rank-controls { display: grid; gap: 3px; }

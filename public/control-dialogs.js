@@ -75,17 +75,24 @@ export class Dialogs {
   }
 
   event(event, division = 'men') {
-    const presets = { ...PRESETS,
-      'custom-track': { ...PRESETS['run-1000'], name: '' }, 'custom-field': { ...PRESETS['long-jump'], name: '' },
-      'custom-match': { ...PRESETS.football, name: '' },
+    const presets = {
+      'run-800': PRESETS['run-800'],
+      'run-1000': PRESETS['run-1000'],
+      // 'run-100': PRESETS['run-100'], 'run-50': PRESETS['run-50'], 'run-200': PRESETS['run-200'],
+      // 'run-400': PRESETS['run-400'], 'run-1500': PRESETS['run-1500'],
+      // 'relay-100': PRESETS['relay-100'], 'relay-400': PRESETS['relay-400'], 'shuttle-50': PRESETS['shuttle-50'],
+      // 'long-jump': PRESETS['long-jump'], 'high-jump': PRESETS['high-jump'], 'shot-put': PRESETS['shot-put'],
+      // 'staff-teams': PRESETS['staff-teams'], football: PRESETS.football,
+      // 'custom-track': { ...PRESETS['run-1000'], name: '' }, 'custom-field': { ...PRESETS['long-jump'], name: '' },
+      // 'custom-match': { ...PRESETS.football, name: '' },
     };
     const labels = Object.fromEntries(Object.entries(presets).map(([id, row]) => [id, row.name || ({ track: '自定义径赛', field: '自定义田赛', match: '自定义球赛' })[row.kind]]));
     const existing = Boolean(event);
     const currentDivision = event ? event.division ?? inferDivision(event.stage, event.name) : division;
     let draft = event ? { ...event, division: currentDivision, stage: currentDivision === 'open' ? event.stage : eventRound(event.stage) }
-      : { ...PRESETS['run-1000'], division, stage: '决赛', venue: '' };
+      : { ...PRESETS['run-800'], division, stage: '决赛', venue: '' };
     this.show(existing ? '编辑赛事' : '新建赛事',
-      `${existing ? '' : select('项目预设', 'preset', labels, 'run-1000')}<div id="event-fields"></div>`,
+      `${existing ? '' : select('项目预设', 'preset', labels, 'run-800')}<div id="event-fields"></div>`,
       existing ? button('删除赛事', { action: 'dialog-delete', glyph: 'trash', variant: 'danger subtle' }) + submitButton('保存赛事') :
         submitButton('创建待播赛事', 'prepare') + submitButton('创建并切换', 'live', ''),
       (values, mode) => this.command('event:save', { id: event?.id, activate: mode === 'live', fields: { ...values, kind: draft.kind } }));
@@ -214,6 +221,7 @@ export class Dialogs {
     this.show('直播信息',
       `<p class="form-note">${event ? h(eventTitle(event)) + ' · ' : ''}OBS 浏览器来源 · 1920 × 1080</p>
       ${input('输出地址', 'output', overlayUrl, 'readonly')}
+      <p class="form-note">把该地址添加为 OBS「浏览器」来源，并放在摄像机来源上方。画面空白处会透出底层摄像画面。</p>
       ${input('榜单页脚', 'title', state.meet.title, 'maxlength="20" required')}
       ${input('挂角副标题', 'subtitle', state.meet.subtitle, 'maxlength="24"')}
       ${input('画面强调色', 'accent', state.meet.accent, 'type="color" required')}`, submitButton('保存直播信息'),

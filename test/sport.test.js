@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyCommand, clientState, initialState, migrateState, verifyState } from '../server/state.js';
 import { csvResults, readCsv } from '../public/csv.js';
-import { PRESETS, activeEvent, checkpoints, clockPhase, clockValue, eventStage, formatTime, moduleBounds, paginatedCount, resultRows, standings } from '../public/sport.js';
+import { MODULES, PRESETS, SAFE_AREA, activeEvent, checkpoints, clockPhase, clockValue, defaultLayout,
+  eventStage, formatTime, moduleBounds, paginatedCount, resultRows, safeAnchor, standings } from '../public/sport.js';
 
 function session(demo = false) {
   let state = initialState(demo);
@@ -107,7 +108,7 @@ test('legacy basketball is removed without deleting other events or modifying st
   const { events, ...previous } = clientState(app.state, false);
   const oldEvents = events.slice(-2).map(({ division, ...event }) => ({ ...event, stage: eventStage({ ...event, division }) }));
   const next = verifyState(migrateState(verifyState({ ...previous, events: oldEvents, version: 1 })));
-  assert.equal(next.version, 5);
+  assert.equal(next.version, 6);
   assert.equal(activeEvent(next).id, football.id);
   assert.deepEqual(activeEvent(next).score, football.score);
   assert.ok(next.events.every(({ name }) => name !== '篮球'));
@@ -136,13 +137,14 @@ test('legacy shared graphics migrate to the live event and female events retain 
   assert.equal(migrated.events[0].graphics.modules.results.visible, false);
   assert.equal(migrated.events[0].graphics.notice.body, '');
   assert.equal(migrated.events.filter((event) => !event.schedule && event.division === 'women' && event.name === '铅球').length, 1);
-  assert.ok(migrated.events.some((event) => event.division === 'men' && event.name === '铅球'));
-  assert.equal(migrated.events.filter((event) => event.schedule && event.distance === 1500).length, 4);
+  assert.equal(migrated.events.filter((event) => event.schedule && event.name === '铅球').length, 0);
+  assert.equal(migrated.events.filter((event) => event.schedule && event.distance === 800).length, 4);
+  assert.equal(migrated.events.filter((event) => event.schedule && event.distance === 1000).length, 2);
 });
 
 test('CSV field import keeps valid, skipped, and invalid attempts together', () => {
   const app = session();
-  app.send('event:select', { eventId: 'school-g1-men-long-jump-final' });
+  app.send('event:save', { fields: PRESETS['long-jump'] });
   const source = '\uFEFF道次,号码,姓名,单位,试次\r\n1,001,甲,"蓝,班",5.0|X|5.32\r\n2,002,乙,二班,-|X\r\n';
   app.send('athlete:import', { rows: readCsv(source) });
   const [first, second] = app.event.competitors;
@@ -172,6 +174,42 @@ test('layout bounds, single result board and clear are enforced on the server mo
   app.send('module:base');
   assert.equal(app.event.graphics.modules.clock.visible, true);
   assert.equal(app.event.graphics.modules.results.visible, false);
+});
+
+test('default positions and the four corners fit the same guide rectangle', () => {
+  for (const key of Object.keys(MODULES)) {
+    const layouts = [defaultLayout(key), ...['tl', 'tr', 'bl', 'br'].map((corner) => safeAnchor(key, 180, corner))];
+    for (const { x, y, scale } of layouts) {
+      const bounds = moduleBounds(key, scale);
+      assert.ok(x >= SAFE_AREA.x && x <= bounds.x - SAFE_AREA.x, `${key} fits horizontally`);
+      assert.ok(y >= SAFE_AREA.y && y <= bounds.y - SAFE_AREA.y, `${key} fits vertically`);
+    }
+  }
+  const event = defaultLayout('event');
+  const athlete = defaultLayout('athlete');
+  assert.ok(event.x + MODULES.event.w < defaultLayout('notice').x);
+  assert.ok(athlete.y + MODULES.athlete.h < event.y);
+});
+
+test('upgrading saved events moves old default corners and preserves custom layout and timing', () => {
+  const old = initialState(true);
+  old.version = 5;
+  const race = activeEvent(old);
+  Object.assign(race.graphics.modules.brand, { x: 48, y: 34, opacity: 65, visible: false });
+  Object.assign(race.graphics.modules.event, { x: 48, y: 931 });
+  Object.assign(race.graphics.modules.clock, { x: 1300, y: 100 });
+  Object.assign(old.standby.modules.brand, { x: 48, y: 34 });
+  race.clock = { phase: 'finished', elapsed: 180400, startedAt: null };
+  const next = verifyState(migrateState(verifyState(old)));
+  const fixed = activeEvent(next);
+  assert.deepEqual(fixed.graphics.modules.brand, { ...defaultLayout('brand'), opacity: 65, visible: false });
+  assert.deepEqual(fixed.graphics.modules.event, defaultLayout('event'));
+  assert.deepEqual(fixed.graphics.modules.clock, race.graphics.modules.clock);
+  assert.deepEqual(fixed.clock, race.clock);
+  assert.deepEqual(next.standby.modules.brand, defaultLayout('brand'));
+  const reset = applyCommand(next, { action: 'module:reset', eventId: fixed.id, key: 'clock' }, 0);
+  assert.deepEqual(activeEvent(reset).graphics.modules.clock, defaultLayout('clock'));
+  assert.strictEqual(migrateState(next), next);
 });
 
 test('formatting uses centiseconds and stable positive countdown rounding', () => {

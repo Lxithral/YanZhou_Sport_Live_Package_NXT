@@ -1,6 +1,6 @@
 import { escapeHtml as h } from './client.js';
 import { button, pager, rosterTools } from './control-views.js';
-import { activeEvent, canJump, canRank, clamp, clockPhase, lineupRoster, paginatedCount, resultRows, resultText, standings } from './sport.js';
+import { activeEvent, canJump, canRank, clamp, clockPhase, lineupRoster, resultRows, resultText, standings } from './sport.js';
 import { beatsRecord } from './meet-program.js';
 
 function tableRows(event, entries, now) {
@@ -61,13 +61,12 @@ export function createRanking({ getState, getTime, run, notify, updateRegion, co
     if (drag && drag.eventId !== renderedId) endDrag();
     const available = Boolean(event && event.kind !== 'match');
     const visible = state.modules.results.visible;
-    const title = event?.kind === 'match' ? '比分' : '成绩榜';
+    const title = event?.kind === 'match' ? '比分' : '冠军';
     const ready = event && (!available || resultRows(event).length > 0);
     const show = button(title + (visible ? '下屏' : '上屏'), {
       action: 'rank-live', glyph: 'screen', variant: visible ? 'published' : 'primary', pressed: visible, disabled: !visible && !ready,
     });
-    const pages = visible && event ? paginatedCount(event, 'results') : 1;
-    updateRegion('#rank-controls', event ? show + (pages > 1 ? '<div class="pager output-pager">' + pager('rank-output-page', state.pages.results, pages, '成绩榜') + '</div>' : '') : '');
+    updateRegion('#rank-controls', event ? show : '');
     updateRegion('#rank-mobile-action', event ? show : '');
     updateRegion('#rank-data-tools', available ? rosterTools(event) : '');
     updateRegion('#rank-reset-control', available && event.rankOrder ? button('恢复按成绩', { action: 'rank-reset', small: true }) : '');

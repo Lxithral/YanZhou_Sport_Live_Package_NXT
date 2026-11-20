@@ -4,11 +4,12 @@ import { csvClassPoints, csvResults } from './csv.js';
 import { button, competitorPanel, currentEventPicker, divisionPicker, icon, inspector, moduleList, operations, pager, rosterPicker, rosterTools } from './control-views.js';
 import { createRanking } from './ranking.js';
 import { createMeetDesk, raceActions } from './meet-control.js';
-import { classStandings, finalFor, topRows } from './meet-program.js';
-import { GRADES, MODULES, activeEvent, applicable, clamp, clockPhase, clockValue, eventRound, eventTitle, formatTime, jumpHeight, moduleBounds, nextJumpHeight, sameProject } from './sport.js';
+import { classStandings, finalFor, onProgram, topRows } from './meet-program.js';
+import { GRADES, MODULES, activeEvent, applicable, clamp, clockPhase, clockValue, eventRound, eventTitle, formatTime, jumpHeight, moduleBounds, nextJumpHeight, safeAnchor, sameProject } from './sport.js';
 
 const $ = (selector) => document.querySelector(selector);
 const workspace = $('.workspace');
+const monitor = $('.monitor-body');
 const preview = $('#preview');
 const output = pageUrl('overlay');
 const connection = $('#connection');
@@ -17,6 +18,7 @@ const rosterView = { page: 0, limit: 4 };
 const regionMarkup = new WeakMap();
 let state;
 let currentPhase;
+let switchingFocus = false;
 let renderedEventId;
 let renderedRosterId;
 let preparedId = '';
@@ -50,6 +52,7 @@ if (demo) {
   $('#copy-output').setAttribute('aria-label', '复制彩排地址');
 }
 $('#monitor-backdrop').value = backdrop;
+monitor.dataset.backdrop = backdrop;
 $('#monitor-guides').checked = guides;
 
 function setWorkspace(key) {
@@ -69,6 +72,7 @@ function setTableView(view) {
 
 function saveMonitorPreferences() {
   backdrop = $('#monitor-backdrop').value;
+  monitor.dataset.backdrop = backdrop;
   guides = $('#monitor-guides').checked;
   try { localStorage.setItem('yanzhou-sports-preview', JSON.stringify({ backdrop, guides })); } catch { /* The current preview still updates. */ }
   tellPreview();
@@ -77,7 +81,7 @@ $('#monitor-backdrop').addEventListener('change', saveMonitorPreferences);
 $('#monitor-guides').addEventListener('change', saveMonitorPreferences);
 
 function tellPreview(extra = {}) {
-  preview.contentWindow?.postMessage({ type: 'preview:settings', editKey: layoutOpen ? layoutKey : '', guides, backdrop, ...extra }, location.origin);
+  preview.contentWindow?.postMessage({ type: 'preview:settings', editKey: layoutOpen ? layoutKey : '', guides, ...extra }, location.origin);
 }
 preview.addEventListener('load', () => tellPreview());
 preview.src = pageUrl('overlay', { preview: '1' });
@@ -158,7 +162,7 @@ function renderRoster(now = client.now()) {
   const event = rosterEvent();
   if (event?.id !== renderedRosterId) rosterView.page = 0;
   renderedRosterId = event?.id;
-  updateRegion('#prep-event-picker', rosterPicker(state.events, state.activeEventId, preparedId));
+  updateRegion('#prep-event-picker', rosterPicker(state.events.filter(onProgram), state.activeEventId, preparedId));
   const total = Math.max(1, Math.ceil((event?.competitors.length ?? 0) / rosterView.limit));
   rosterView.page = clamp(rosterView.page, 0, total - 1);
   const stagedJump = event?.schedule?.project === 'high-jump' && event.id !== state.activeEventId;
@@ -187,6 +191,12 @@ function renderLayers(event) {
 
 function render() {
   const event = activeEvent(state);
+  const program = state.events.filter(onProgram);
+  if (!switchingFocus && program.length && event && !onProgram(event)) {
+    switchingFocus = true;
+    void run('event:select', { eventId: program[0].id }).finally(() => { switchingFocus = false; });
+    return;
+  }
   if (renderedEventId !== state.activeEventId) {
     renderedEventId = state.activeEventId;
     layoutDirty = false;
@@ -195,8 +205,9 @@ function render() {
   if (!applicable(layoutKey, event)) { layoutKey = 'brand'; layoutDirty = false; }
   const now = client.now();
   currentPhase = event ? clockPhase(event, now) : null;
-  updateRegion('#event-divisions', divisionPicker(state.events, state.activeEventId));
-  updateRegion('#active-event-picker', currentEventPicker(state.events, state.activeEventId));
+  const listed = program.length ? program : state.events;
+  updateRegion('#event-divisions', divisionPicker(listed, state.activeEventId));
+  updateRegion('#active-event-picker', currentEventPicker(listed, state.activeEventId));
   $('#edit-active').disabled = !event;
   updateRegion('#operations', operations(event, now));
   renderRoster(now);
@@ -254,7 +265,7 @@ async function copyOutput() {
     try { copied = document.execCommand('copy'); } finally { field.remove(); }
     if (!copied) throw new Error('浏览器限制复制，请在「直播信息」中选中输出地址。');
   }
-  notify('已复制输出地址');
+  notify('已复制 OBS 透明图层地址');
 }
 
 function showLayout(key) {
@@ -271,9 +282,17 @@ function showLayout(key) {
   tellPreview();
 }
 
-function formBounds(form) {
+function formScale(form) {
   const scale = Number(form.elements.scale.value) || state.modules[layoutKey].scale;
-  return moduleBounds(layoutKey, clamp(scale, 35, Number(form.elements.scale.max)));
+  return clamp(scale, 35, Number(form.elements.scale.max));
+}
+
+function updatePositionBounds(form) {
+  const bounds = moduleBounds(layoutKey, formScale(form));
+  for (const axis of ['x', 'y']) {
+    form.elements[axis].max = bounds[axis];
+    if (Number(form.elements[axis].value) > bounds[axis]) form.elements[axis].value = bounds[axis];
+  }
 }
 
 async function selectEvent(next) {
@@ -374,9 +393,11 @@ const handlers = {
   },
   anchor({ key }) {
     const form = $('#layout-form');
-    const bounds = formBounds(form);
-    form.elements.x.value = key.endsWith('r') ? Math.max(0, bounds.x - 48) : Math.min(48, bounds.x);
-    form.elements.y.value = key.startsWith('b') ? Math.max(0, bounds.y - 34) : Math.min(34, bounds.y);
+    const { x, y, scale } = safeAnchor(layoutKey, formScale(form), key);
+    form.elements.x.value = x;
+    form.elements.y.value = y;
+    form.elements.scale.value = scale;
+    updatePositionBounds(form);
     layoutDirty = true;
   },
 };
@@ -416,14 +437,7 @@ document.addEventListener('click', async (e) => {
 layoutPane.addEventListener('input', (e) => {
   if (e.target.name === 'module') return;
   layoutDirty = true;
-  if (e.target.name === 'scale') {
-    const form = e.target.form;
-    const bounds = formBounds(form);
-    for (const axis of ['x', 'y']) {
-      form.elements[axis].max = bounds[axis];
-      if (Number(form.elements[axis].value) > bounds[axis]) form.elements[axis].value = bounds[axis];
-    }
-  }
+  if (e.target.name === 'scale') updatePositionBounds(e.target.form);
 });
 
 layoutPane.addEventListener('change', (e) => {

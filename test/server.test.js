@@ -57,7 +57,7 @@ test('control and output stay in sync, rehearsals stay isolated, and a restart r
   const output = connect(base, 'view');
   const rehearsal = connect(base, 'control', 'demo');
   const [live, view, practice] = await Promise.all([operator.state(), output.state(), rehearsal.state()]);
-  assert.equal(live.events.length, 49);
+  assert.equal(live.events.length, 6);
   assert.ok(live.events.every(({ schedule }) => schedule));
   assert.ok(practice.events.every(({ schedule }) => schedule));
   assert.equal(view.events.length, 1);
@@ -70,7 +70,7 @@ test('control and output stay in sync, rehearsals stay isolated, and a restart r
   assert.equal((await output.state(1)).modules.brand.visible, true);
   now += 45000;
   assert.equal((await operator.command('split:add', { eventId: live.activeEventId, index: 0 })).ok, true);
-  assert.deepEqual(activeEvent(await output.state(2)).splits, [{ distance: 100, time: 45000 }]);
+  assert.deepEqual(activeEvent(await output.state(2)).splits, [{ distance: 400, time: 45000 }]);
   assert.equal(JSON.parse(await readFile(path.join(dataDir, 'settings.json'), 'utf8')).revision, 2);
   const denied = connect(base, 'control', 'live', 'https://other.example');
   const code = await new Promise((resolve) => denied.ws.once('unexpected-response', (_, res) => { res.resume(); resolve(res.statusCode); }));
@@ -82,7 +82,7 @@ test('control and output stay in sync, rehearsals stay isolated, and a restart r
   base = `http://127.0.0.1:${await app.listen(0)}`;
   const resumed = await connect(base, 'view').state(2);
   assert.equal(clockValue(activeEvent(resumed), now), 50000);
-  assert.equal(activeEvent(resumed).splits[0].distance, 100);
+  assert.equal(activeEvent(resumed).splits[0].distance, 400);
   assert.equal((await connect(base, 'view', 'demo').state(1)).modules.brand.visible, false);
 });
 
@@ -95,8 +95,8 @@ test('switching divisions restores each event graphics, results, clock, and on-a
   let operator = connect(base);
   const output = connect(base, 'view');
   await operator.state();
-  const men = 'school-g1-men-run-1500-final';
-  const women = 'school-g1-women-run-1500-final';
+  const men = 'school-g1-men-run-800-final';
+  const women = 'school-g1-women-run-800-final';
   let revision = 0;
   async function send(action, fields) {
     const result = await operator.command(action, fields);

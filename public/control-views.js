@@ -192,7 +192,7 @@ export function competitorPanel(event, now, { start, limit, onAir }) {
 }
 
 export function moduleList(state, event) {
-  return Object.entries(MODULES).filter(([key]) => !['results', 'teams'].includes(key) && applicable(key, event)).map(([key, meta]) => {
+  return Object.entries(MODULES).filter(([key]) => !['results', 'teams', 'score'].includes(key) && applicable(key, event)).map(([key, meta]) => {
     const live = state.modules[key].visible;
     const toggle = button(live ? '隐藏' : '显示', { action: 'module-toggle', key, accessible: `${live ? '隐藏' : '显示'}${meta.title}`, small: true, pressed: live, variant: 'tally-button' });
     const total = ['lineup', 'results'].includes(key) ? paginatedCount(event, key) : 1;
@@ -235,7 +235,7 @@ export function inspector({ state, key }) {
     <div class="layout-section" data-layout-section="position">
       <div class="field-triple">${input('水平 X', 'x', x, `type="number" min="0" max="${bounds.x}" required`)}${input('垂直 Y', 'y', y, `type="number" min="0" max="${bounds.y}" required`)}${input('缩放 %', 'scale', scale, `type="number" min="35" max="${moduleScaleLimit(key)}" required`)}</div>
       <div class="anchor-buttons">${[['tl', '左上'], ['tr', '右上'], ['bl', '左下'], ['br', '右下']].map(([anchor, name]) => button(name, { action: 'anchor', key: anchor, small: true })).join('')}</div>
-      <p class="form-note">上屏图层可在监看中拖动。</p>
+      <p class="form-note">四角按钮会对齐到安全区，图层过大时会相应缩小。上屏图层可在监看中拖动。</p>
     </div>
     <div class="layout-section" data-layout-section="style" hidden>
       <div class="field-pair">${input('不透明度 %', 'opacity', opacity, 'type="number" min="0" max="100" required')}${input('动画时长 ms', 'duration', duration, 'type="number" min="80" max="2000" required')}</div>
