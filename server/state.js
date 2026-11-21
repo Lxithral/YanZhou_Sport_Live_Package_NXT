@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import {
-  DIVISIONS, GRADES, KINDS, MAX_COMPETITORS, MAX_TIME, MODULES, MOTIONS, PRESETS, activeEvent, applicable, blankClock,
-  canJump, canRank, checkpoints, clamp, clockPhase, defaultLayout, elapsedTime, eventStage, heats, inferDivision,
+  DIVISIONS, GRADES, KINDS, MAX_COMPETITORS, MODULES, MOTIONS, PRESETS, activeEvent, applicable,
+  canJump, canRank, clamp, defaultLayout, eventStage, inferDivision,
   jumpFailures, jumpHeight, moduleBounds, moduleScaleLimit, nextJumpHeight, paginatedCount, parseMark, parseTime, relayRegistration, standings,
 } from '../public/sport.js';
 import { AWARD_LIMIT, SCHOOL_RACES, canScore, className, classStandings, finalFor, topRows } from '../public/meet-program.js';
 
 const LEGACY_PRESET_IDS = new Set(['run-1000', 'run-800', 'run-100', 'relay-100', 'long-jump', 'shot-put', 'run-1500']
   .flatMap((id) => [id, `${id}-women`]));
-const LEGACY_DEFAULT_ORIGINS = { brand: [48, 34], event: [48, 931], clock: [1472, 34], score: [1212, 34], athlete: [48, 813], notice: [752, 925] };
-const STATE_VERSION = 6;
+const LEGACY_DEFAULT_ORIGINS = { brand: [48, 34], event: [48, 931], score: [1212, 34], athlete: [48, 813], notice: [752, 925] };
+const STATE_VERSION = 7;
 const REHEARSAL_RACE = 'school-g1-men-run-1000-final';
 const REHEARSAL_LONG_JUMP = 'school-g1-men-long-jump-final';
 const REHEARSAL_TARGETS = new Map([['run-1000', REHEARSAL_RACE], ['long-jump', REHEARSAL_LONG_JUMP]]);
@@ -19,7 +19,7 @@ const SPECIAL = ['DNS', 'DNF', 'DQ', 'NM'];
 const MAX_EVENTS = 160;
 const MAX_ATTEMPTS = 12;
 const MAX_HEATS = 32;
-const RESULT_COMMANDS = new Set(['athlete:save', 'athlete:delete', 'athlete:finish', 'athlete:attempt', 'athlete:import', 'rank:move', 'rank:remove', 'rank:reset', 'jump:mark', 'jump:undo']);
+const RESULT_COMMANDS = new Set(['athlete:save', 'athlete:delete', 'athlete:attempt', 'athlete:import', 'rank:move', 'rank:remove', 'rank:reset', 'jump:mark', 'jump:undo']);
 
 function requireThat(condition, message) {
   if (!condition) throw new Error(message);
@@ -57,7 +57,7 @@ function defaultGraphics() {
 }
 
 function newEvent(fields, id = randomUUID()) {
-  return { ...fields, id, competitors: [], clock: blankClock(), splits: [], score: scoreStart(), graphics: defaultGraphics() };
+  return { ...fields, id, competitors: [], score: scoreStart(), graphics: defaultGraphics() };
 }
 
 function schoolEvents() {
@@ -95,11 +95,6 @@ function validStart(start) {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 16) === start;
 }
 
-function validClock(clock) {
-  return ['ready', 'running', 'paused', 'finished'].includes(clock?.phase) && Number.isFinite(clock.elapsed) &&
-    (clock.startedAt === null || Number.isFinite(clock.startedAt));
-}
-
 export function verifyState(value) {
   requireThat(object(value) && Number.isInteger(value.version) && value.version >= 1 && value.version <= STATE_VERSION && Number.isSafeInteger(value.revision) && value.revision >= 0 &&
     validGraphics(value.version >= 3 ? value.standby : value, value.version) && Array.isArray(value.events) &&
@@ -107,8 +102,7 @@ export function verifyState(value) {
   const ids = new Set();
   for (const event of value.events) {
     requireThat(typeof event?.id === 'string' && !ids.has(event.id) && typeof event.name === 'string' && typeof event.stage === 'string' &&
-      Object.hasOwn(KINDS, event.kind) && Array.isArray(event.competitors) && Array.isArray(event.splits) &&
-      validClock(event.clock) && object(event.score), '赛事设置记录损坏。');
+      Object.hasOwn(KINDS, event.kind) && Array.isArray(event.competitors) && object(event.score), '赛事设置记录损坏。');
     if (value.version >= 3) {
       requireThat(Object.hasOwn(DIVISIONS, event.division) && validGraphics(event.graphics, value.version) &&
         BOARD_KEYS.every((key) => Number.isInteger(event.graphics.pages[key]) && event.graphics.pages[key] >= 0), '赛事包装配置损坏。');
@@ -122,15 +116,9 @@ export function verifyState(value) {
     if (event.kind === 'track') {
       requireThat(Number.isInteger(event.distance) && event.distance > 0 && Number.isInteger(event.trackLength) && event.trackLength >= 50 &&
         Number.isInteger(event.legs) && event.legs >= 1 && event.legs <= 12 && event.distance / event.trackLength <= 50, '径赛设置记录损坏。');
-      if (event.heatRuns !== undefined) {
-        requireThat(Number.isInteger(event.heat) && event.heat >= 1 && event.heat <= MAX_HEATS && object(event.heatRuns) &&
-          Object.entries(event.heatRuns).every(([heat, run]) => +heat !== event.heat && +heat >= 1 && +heat <= MAX_HEATS &&
-            validClock(run?.clock) && Array.isArray(run.splits)), '分组计时记录损坏。');
-      }
     }
     if (event.kind === 'match') {
-      requireThat(['up', 'down'].includes(event.clockMode) && Number.isInteger(event.periodMinutes) &&
-        ['home', 'away', 'period'].every((key) => Number.isInteger(event.score[key])), '球赛设置记录损坏。');
+      requireThat(['home', 'away', 'period'].every((key) => Number.isInteger(event.score[key])), '球赛设置记录损坏。');
     }
     requireThat(event.competitors.every((athlete) => typeof athlete?.id === 'string' && typeof athlete.name === 'string' &&
       Array.isArray(athlete.attempts) && (athlete.time === null || Number.isFinite(athlete.time))), '参赛名单记录损坏。');
@@ -164,7 +152,7 @@ function migrateLegacyGraphics(state) {
 }
 
 function hasRaceData(event) {
-  return event.competitors.length > 0 || event.clock.phase !== 'ready' || event.clock.elapsed !== 0 || event.splits.length > 0 || Boolean(event.heatRuns);
+  return event.competitors.length > 0;
 }
 
 function migrateSchoolEvents(state) {
@@ -184,9 +172,9 @@ function migrateSchoolEvents(state) {
     const target = updated.find((event) => event.id === schoolId);
     if (!sample?.competitors.length || !sample.competitors.every(({ id }) => id.startsWith('demo-')) || !target || hasRaceData(target)) continue;
     if (['kind', 'division', 'distance', 'trackLength', 'legs'].some((key) => sample[key] !== target[key])) continue;
-    const { competitors, clock, splits, rankOrder } = sample;
+    const { competitors, rankOrder } = sample;
     updated = updated.filter(({ id }) => id !== oldId).map((event) => event.id === schoolId ?
-      { ...event, competitors, clock, splits, ...(rankOrder ? { rankOrder } : {}) } : event);
+      { ...event, competitors, ...(rankOrder ? { rankOrder } : {}) } : event);
     if (selectionId === oldId) selectionId = schoolId;
   }
   const selection = updated.find(({ id }) => id === selectionId) ?? updated.find((event) => event.schedule) ?? updated[0];
@@ -205,13 +193,25 @@ function migrateDefaultPositions(graphics) {
   return { ...graphics, modules };
 }
 
+function stripClockModule(graphics) {
+  const { clock, ...modules } = graphics.modules;
+  return { ...graphics, modules };
+}
+
+function stripTiming(event) {
+  const { clock, splits, heatRuns, clockMode, periodMinutes, ...rest } = event;
+  return { ...rest, graphics: stripClockModule(event.graphics) };
+}
+
 export function migrateState(state) {
   if (state.version === STATE_VERSION) return state;
   const { events, activeEventId, standby } = state.version < 5 ? migrateSchoolEvents(state) : state;
+  const timingDropped = state.version < 7;
   return {
     version: STATE_VERSION, revision: state.revision + 1, activeEventId,
-    events: events.map((event) => ({ ...event, graphics: migrateDefaultPositions(event.graphics) })),
-    standby: migrateDefaultPositions(standby),
+    events: (timingDropped ? events.map(stripTiming) : events)
+      .map((event) => ({ ...event, graphics: migrateDefaultPositions(event.graphics) })),
+    standby: migrateDefaultPositions(timingDropped ? stripClockModule(standby) : standby),
   };
 }
 
@@ -259,14 +259,13 @@ function readEvent(fields, existing) {
     const distance = integer(fields.distance, 10, 30000, '总距离');
     const trackLength = integer(fields.trackLength, 50, 1000, '跑道每圈长度');
     const legs = integer(fields.legs, 1, 12, '棒数');
-    requireThat(distance / trackLength <= 50 && distance % legs === 0, '请填写可整除棒数的距离，最多支持 50 个通过点。');
+    requireThat(distance / trackLength <= 50 && distance % legs === 0, '请填写可整除棒数的距离，每项最多 50 圈。');
     return { ...info, distance, trackLength, legs };
   }
   if (kind === 'match') {
-    requireThat(['up', 'down'].includes(fields.clockMode), '请选择计时方向。');
     requireThat(['节', '半场', '局'].includes(fields.periodLabel), '请选择节次单位。');
     return { ...info, homeName: text(fields.homeName, 18, '主队', true), awayName: text(fields.awayName, 18, '客队', true),
-      clockMode: fields.clockMode, periodMinutes: integer(fields.periodMinutes, 1, 180, '单节分钟数'), periodLabel: fields.periodLabel };
+      periodLabel: fields.periodLabel };
   }
   return info;
 }
@@ -282,18 +281,11 @@ function saveEvent(state, { id, fields, activate: takeLive = true }) {
     return;
   }
   requireThat(event.kind === info.kind, '已创建的赛事类别固定，可新建其他类别。');
-  if (info.kind === 'track' && ['distance', 'trackLength', 'legs'].some((key) => info[key] !== event[key])) {
-    const runs = [{ clock: event.clock, splits: event.splits }, ...Object.values(event.heatRuns ?? {})];
-    requireThat(runs.every(({ clock, splits }) => clock.phase === 'ready' && splits.length === 0), '请重置各组计时后修改距离或棒数。');
-  }
   if (event.schedule) {
     requireThat(event.division === info.division, '本届赛程的组别固定，请选对应组别的赛事。');
     const start = fields.start ?? event.schedule.start;
     requireThat(validStart(start), '请输入有效的比赛时间。');
     event.schedule.start = start;
-  }
-  if (info.kind === 'match' && ['clockMode', 'periodMinutes'].some((key) => info[key] !== event[key])) {
-    requireThat(event.clock.phase === 'ready' && event.clock.elapsed === 0, '请重置本节计时后修改方向或时长。');
   }
   Object.assign(event, info);
 }
@@ -375,49 +367,6 @@ function getRosterEvent(state, eventId) {
   return event;
 }
 
-function requireHeat(event, heat) {
-  requireThat(heat === undefined || heat === (event.heat ?? 1), '当前分组已切换，请核对后再操作。');
-}
-
-function eventClock(state, { eventId, operation, value, heat }, now) {
-  const event = getEvent(state, eventId);
-  requireThat(event.kind === 'track' || event.kind === 'match', '本项目无需计时。');
-  requireHeat(event, heat);
-  const phase = clockPhase(event, now);
-  const elapsed = elapsedTime(event.clock, now);
-  const down = event.kind === 'match' && event.clockMode === 'down';
-  const limit = down ? event.periodMinutes * 60000 : MAX_TIME;
-  switch (operation) {
-    case 'start':
-    case 'resume':
-      requireThat(phase === (operation === 'start' ? 'ready' : 'paused') && elapsed < limit, '计时状态已变化，请确认当前状态。');
-      event.clock = { phase: 'running', elapsed, startedAt: now };
-      break;
-    case 'pause':
-      requireThat(phase === 'running', '只有计时中可以暂停。');
-      event.clock = { phase: 'paused', elapsed, startedAt: null };
-      break;
-    case 'finish':
-      requireThat(['running', 'paused'].includes(phase), '请先开始计时。');
-      event.clock = { phase: 'finished', elapsed, startedAt: null };
-      break;
-    case 'reset':
-      event.clock = blankClock();
-      event.splits = [];
-      break;
-    case 'set': {
-      requireThat(phase !== 'running', '请暂停后校时。');
-      const clock = parseTime(value ?? '');
-      requireThat(clock <= limit, '校时值超出本项计时范围。');
-      const adjusted = down ? limit - clock : clock;
-      requireThat(adjusted >= (event.splits.at(-1)?.time ?? 0), '校时不能早于最近的通过记录。');
-      event.clock = { phase: adjusted === limit ? 'finished' : (adjusted ? 'paused' : 'ready'), elapsed: adjusted, startedAt: null };
-      break;
-    }
-    default: throw new Error('无法识别的计时操作。');
-  }
-}
-
 function saveModule(state, { key, patch, eventId }) {
   requireThat(Object.hasOwn(MODULES, key) && object(patch), '包装模块不存在。');
   const { modules, pages, athlete, notice } = graphicsForActive(state, eventId);
@@ -486,28 +435,11 @@ const commands = {
     state.events.splice(index, 1);
     if (state.activeEventId === eventId) state.activeEventId = (state.events[index] ?? state.events[index - 1])?.id ?? null;
   },
-  'heat:select'(state, { eventId, heat }, now) {
-    const event = getEvent(state, eventId);
-    const current = event.heat ?? 1;
-    const next = integer(heat, 1, MAX_HEATS, '分组');
-    requireThat(event.kind === 'track' && event.schedule && heats(event).includes(next), '请先在名单设置分组。');
-    if (current === next) return;
-    requireThat(clockPhase(event, now) !== 'running', '请先暂停或结束本组计时。');
-    const runs = event.heatRuns ??= {};
-    runs[current] = { clock: event.clock, splits: event.splits };
-    const saved = runs[next] ?? { clock: blankClock(), splits: [] };
-    event.heat = next;
-    event.clock = saved.clock;
-    event.splits = saved.splits;
-    delete runs[next];
-    event.graphics.pages.lineup = 0;
-  },
   'round:qualify'(state, { eventId }) {
     const event = getEvent(state, eventId);
     const final = finalFor(state.events, event);
     requireThat(final, '找不到对应的决赛。');
-    requireThat(!final.competitors.length && final.clock.phase === 'ready', '决赛已有名单或计时，请在备赛名单中核对。');
-    requireThat(event.clock.phase !== 'running', '请结束本组计时后确认晋级。');
+    requireThat(!final.competitors.length, '决赛已有名单，请在备赛名单中核对。');
     const rows = topRows(event);
     requireThat(rows.length && rows.length <= AWARD_LIMIT, '请先确认前八名，晋级线并列时按裁判结果调整名次。');
     final.competitors = rows.map(({ athlete }) => readAthlete({ name: athlete.name, bib: athlete.bib, team: athlete.team }, final));
@@ -518,27 +450,11 @@ const commands = {
     requireThat(typeof scored === 'boolean', '请选择是否计分。');
     if (scored) {
       const rows = topRows(event);
-      requireThat(event.clock.phase !== 'running', '请结束本组计时后确认计分。');
       requireThat(rows.length && new Set(rows.map(({ rank }) => rank)).size === rows.length, '请先按裁判结果确认有效名次和并列处理。');
       requireThat(rows.every(({ athlete }) => className(event, athlete)), '请给前八名填写单位或班级后再确认。');
       if (event.schedule.project === 'shuttle-50') requireThat(rows.every(({ athlete }) => relayRegistration(athlete) !== '人数不符'), '有队伍人数不符，请核验或按裁判结果取消资格。');
     }
     event.schedule.scored = scored;
-  },
-  'clock:action': eventClock,
-  'split:add'(state, { eventId, index, heat }, now) {
-    const event = getEvent(state, eventId);
-    requireHeat(event, heat);
-    const points = checkpoints(event);
-    requireThat(event.kind === 'track' && clockPhase(event, now) === 'running', '请在径赛计时中记录通过。');
-    requireThat(index === event.splits.length && index < points.length, '通过点已更新，请核对后继续。');
-    event.splits.push({ distance: points[index], time: Math.floor(elapsedTime(event.clock, now) / 10) * 10 });
-  },
-  'split:undo'(state, { eventId, index, heat }) {
-    const event = getEvent(state, eventId);
-    requireHeat(event, heat);
-    requireThat(event.splits.length > 0 && event.splits.length === index, '通过记录已更新，请重新确认。');
-    event.splits.pop();
   },
   'athlete:save'(state, { eventId, id, fields }) {
     const event = getRosterEvent(state, eventId);
@@ -553,16 +469,6 @@ const commands = {
     getAthlete(event, id);
     event.competitors = event.competitors.filter((athlete) => athlete.id !== id);
     pruneRanks(event);
-  },
-  'athlete:finish'(state, { eventId, id, heat }, now) {
-    const event = getRosterEvent(state, eventId);
-    const athlete = getAthlete(event, id);
-    requireHeat(event, heat);
-    requireThat(event.kind === 'track' && clockPhase(event, now) === 'running', '请在径赛计时中记录完赛。');
-    requireThat((athlete.heat ?? 1) === (event.heat ?? 1), '该选手不在当前计时分组。');
-    requireThat(athlete.status === 'pending', '该选手已录入成绩，可打开编辑修正。');
-    athlete.time = Math.floor(elapsedTime(event.clock, now) / 10) * 10;
-    athlete.status = 'ok';
   },
   'athlete:attempt'(state, { eventId, id, value, index }) {
     const event = getRosterEvent(state, eventId);
@@ -621,13 +527,11 @@ const commands = {
     requireThat(event.kind === 'match' && ['home', 'away'].includes(side) && [-1, 1, 2, 3].includes(delta), '记分操作无效。');
     event.score[side] = clamp(event.score[side] + delta, 0, 999);
   },
-  'match:period'(state, { eventId, period }, now) {
+  'match:period'(state, { eventId, period }) {
     const event = getEvent(state, eventId);
-    requireThat(event.kind === 'match' && clockPhase(event, now) !== 'running', '请先暂停本节计时。');
+    requireThat(event.kind === 'match', '记分操作无效。');
     const next = integer(period, 1, 30, '节次');
-    if (next === event.score.period) return;
     event.score.period = next;
-    event.clock = blankClock();
   },
   'module:save': saveModule,
   'module:reset'(state, { key, eventId }) {

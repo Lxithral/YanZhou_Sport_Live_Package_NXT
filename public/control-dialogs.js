@@ -1,7 +1,7 @@
 import { escapeHtml as h } from './client.js';
 import { button, input, select } from './control-views.js';
 import { csvTemplate, readCsv } from './csv.js';
-import { DIVISIONS, GRADES, PRESETS, activeEvent, canJump, clockValue, eventRound, eventTitle, formatTime, inferDivision, jumpFailures, jumpHeight } from './sport.js';
+import { DIVISIONS, GRADES, PRESETS, activeEvent, canJump, eventRound, eventTitle, formatTime, inferDivision, jumpFailures, jumpHeight } from './sport.js';
 
 function formValues(form) {
   return Object.fromEntries(new FormData(form));
@@ -108,9 +108,7 @@ export class Dialogs {
           ${input('每圈（米）', 'trackLength', draft.trackLength, 'type="number" min="50" max="1000" required')}
           ${input('棒数', 'legs', draft.legs, 'type="number" min="1" max="12" required')}</div>` : ''}
         ${match ? `<div class="field-pair">${input('主队', 'homeName', draft.homeName, 'maxlength="18" required')}${input('客队', 'awayName', draft.awayName, 'maxlength="18" required')}</div>
-          <div class="field-triple">${select('计时方向', 'clockMode', { down: '倒计时', up: '正计时' }, draft.clockMode)}
-          ${input('单节（分钟）', 'periodMinutes', draft.periodMinutes, 'type="number" min="1" max="180" required')}
-          ${select('节次单位', 'periodLabel', { 节: '节', 半场: '半场', 局: '局' }, draft.periodLabel)}</div>` : ''}`;
+          ${select('节次单位', 'periodLabel', { 节: '节', 半场: '半场', 局: '局' }, draft.periodLabel)}` : ''}`;
     }
     draw();
     this.content.querySelector('[name="preset"]')?.addEventListener('change', (e) => {
@@ -121,7 +119,7 @@ export class Dialogs {
     if (existing) {
       fields.querySelector('[name="name"]').focus();
       this.actions.querySelector('[data-action="dialog-delete"]').addEventListener('click', () => this.confirm(
-        '删除赛事？', `将删除「${eventTitle(event)}」的名单、计时、成绩和画面设置。`, '删除赛事',
+        '删除赛事？', `将删除「${eventTitle(event)}」的名单、成绩和画面设置。`, '删除赛事',
         () => this.command('event:delete', { eventId: event.id }), 'danger'));
     }
   }
@@ -136,7 +134,7 @@ export class Dialogs {
     this.show(edit ? '编辑选手' : '添加选手',
       `<div class="field-pair">${input('姓名 / 队名', 'name', row.name, 'maxlength="30" required')}${input('单位 / 班级', 'team', row.team, 'maxlength="35"')}</div>
       <div class="field-pair">${input(field ? '出场序' : '道次', 'lane', row.lane, 'type="number" min="1" max="999"')}${input('号码', 'bib', row.bib, 'maxlength="14"')}</div>
-      ${event.kind === 'track' && event.schedule ? input('计时分组', 'heat', row.heat ?? 1, 'type="number" min="1" max="32"') : ''}
+      ${event.kind === 'track' && event.schedule ? input('分组', 'heat', row.heat ?? 1, 'type="number" min="1" max="32"') : ''}
       ${shuttle ? `<div class="field-pair">${input('男生人数', 'boys', row.boys, 'type="number" min="0" max="99"')}${input('女生人数', 'girls', row.girls, 'type="number" min="0" max="99"')}</div><p class="form-note">每班 10 名队员，男、女各 5 名。</p>` : ''}
       ${field ? input('试次（米）', 'attempts', row.attempts?.map((value) => typeof value === 'number' ? (value / 100).toFixed(2) : value).join('|'), 'maxlength="128" placeholder="5.22|X|5.31"') :
         event.kind === 'track' ? input('成绩', 'result', Number.isFinite(row.time) ? formatTime(row.time) : '', 'maxlength="24" placeholder="03:21.52 或 12.35"') : ''}
@@ -241,13 +239,4 @@ export class Dialogs {
       (fields, value) => this.command('text:save', { eventId: state.activeEventId, key, fields, visible: value === 'publish' }));
   }
 
-  setClock(event, now) {
-    this.show('校时', input(event.clockMode === 'down' ? '剩余时间' : '已用时间', 'value', formatTime(clockValue(event, now)), 'maxlength="14" required'),
-      submitButton('应用校时'), ({ value }) => this.command('clock:action', { eventId: event.id, heat: event.heat ?? 1, operation: 'set', value }));
-  }
-
-  passes(event) {
-    const items = event.splits.map(({ distance, time }) => `<li><span>${distance} m</span><b>${formatTime(time)}</b></li>`).join('');
-    this.show('通过记录', `<ol class="pass-history">${items}</ol>`, '', () => {});
-  }
 }

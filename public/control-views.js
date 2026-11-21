@@ -1,6 +1,6 @@
 import { escapeHtml as h } from './client.js';
 import {
-  DIVISIONS, MODULES, MOTIONS, PHASES, applicable, canJump, checkpoints, clockPhase, eventTitle, formatMark, formatTime, heats, jumpHeight, moduleBounds,
+  DIVISIONS, MODULES, MOTIONS, applicable, canJump, eventTitle, formatMark, jumpHeight, moduleBounds,
   modulePosition, moduleScaleLimit, nextJumpHeight, paginatedCount, periodTitle, relayRegistration, resultText, roster, standings,
 } from './sport.js';
 import { compareSchedule } from './meet-program.js';
@@ -84,40 +84,7 @@ export function pager(action, page, total, label) {
     ${button('下一页', { action, key: 'next', value: page + 1, glyph: 'right', small: true, disabled: page + 1 >= total, accessible: `${label}下一页` })}`;
 }
 
-function clocks(event, phase) {
-  const active = phase === 'running';
-  const ready = phase === 'ready';
-  const paused = phase === 'paused';
-  const groups = event.kind === 'track' && event.schedule ? heats(event) : [];
-  return `<div class="timing-row">
-    <div class="time-readout"><strong id="current-time" aria-label="当前计时">${event.kind === 'match' && event.clockMode === 'down' ? `${event.periodMinutes}:00` : (event.kind === 'track' ? '00:00.00' : '00:00')}</strong><b class="phase phase--${phase}" id="current-phase">${PHASES[phase]}</b></div>
-    ${groups.length > 1 ? `<label class="heat-picker">计时分组<select id="heat-select" ${active ? 'disabled' : ''}>${options(Object.fromEntries(groups.map((heat) => [heat, `第 ${heat} 组`])), event.heat ?? 1)}</select></label>` : ''}
-    <div class="clock-actions">
-      ${button(paused ? '继续计时' : '开始计时', { action: 'clock', key: paused ? 'resume' : 'start', glyph: 'start', variant: 'primary', disabled: !ready && !paused })}
-      ${button('暂停', { action: 'clock', key: 'pause', glyph: 'pause', disabled: !active })}
-      ${button('结束计时', { action: 'clock', key: 'finish', glyph: 'stop', disabled: !active && !paused })}
-    </div>
-  </div>`;
-}
-
-function splitProgress(event, phase) {
-  const passes = event.splits.length;
-  const distances = checkpoints(event);
-  const next = distances[passes];
-  const first = Math.max(0, Math.min(passes - 1, distances.length - 4));
-  const points = distances.slice(first, first + 4);
-  return `<div class="progress-row">
-    <span>通过点${distances.length > 4 ? ` <small>${passes}/${distances.length}</small>` : ''}</span>
-    <div class="checkpoints" aria-label="首位选手通过点">${points.map((distance, index) => {
-      const i = first + index;
-      return `<div class="checkpoint ${i < passes ? 'passed' : ''}" ${i === passes ? 'aria-current="step"' : ''}>
-        <b>${distance} m</b>${i < passes ? `<small>${formatTime(event.splits[i].time)}</small>` : ''}</div>`;
-    }).join('')}</div>
-    ${button(next === event.distance ? '记录头名冲线' : '记录通过', { action: 'split', glyph: 'flag', small: true, variant: 'capture', disabled: phase !== 'running' || next === undefined })}
-  </div>`;
-}
-
-function ballPanel(event, phase) {
+function ballPanel(event) {
   const teams = [['home', event.homeName], ['away', event.awayName]];
   return `<div class="ball-panel">
     <div class="ball-grid">${teams.map(([side, name]) => `<div class="ball-team ball-team--${side}">
@@ -125,30 +92,24 @@ function ballPanel(event, phase) {
         <div class="score-actions">${(event.periodLabel === '半场' ? [-1, 1] : [-1, 1, 2, 3]).map((value) => button(`${value > 0 ? '+' : '−'}${Math.abs(value)}`, { action: 'score', key: side, value, small: true, disabled: value < 0 && !event.score[side] })).join('')}</div>
       </div>`).join('')}</div>
     <div class="period-actions"><span class="period-label">${h(periodTitle(event))}</span>
-      ${button('上一' + event.periodLabel, { action: 'period', value: event.score.period - 1, small: true, disabled: phase === 'running' || event.score.period <= 1 })}
-      ${button('下一' + event.periodLabel, { action: 'period', value: event.score.period + 1, small: true, disabled: phase === 'running' || event.score.period >= 30 })}
+      ${button('上一' + event.periodLabel, { action: 'period', value: event.score.period - 1, small: true, disabled: event.score.period <= 1 })}
+      ${button('下一' + event.periodLabel, { action: 'period', value: event.score.period + 1, small: true, disabled: event.score.period >= 30 })}
     </div>
   </div>`;
 }
 
-export function operations(event, now) {
+export function operations(event) {
   if (!event) return '<section class="panel no-event"><p>建立赛事后即可现场操作。</p></section>';
+  if (event.kind === 'track') return '';
   if (event.kind === 'ranking') return '<section class="panel no-event" aria-label="比赛操作"><p>赛制待定 · 可先导入队伍，再按裁判结果排列名次。</p></section>';
-  const phase = clockPhase(event, now);
-  const best = event.kind === 'field' ? standings(event)[0]?.value : null;
+  if (event.kind === 'match') return `<section class="panel operations-panel operations-panel--match" aria-label="比赛操作">${ballPanel(event)}</section>`;
+  const best = standings(event)[0]?.value;
   const project = event.schedule?.project;
   const jump = project === 'high-jump';
-  return `<section class="panel operations-panel operations-panel--${event.kind}" aria-label="比赛操作">
-    ${event.kind === 'field' ? `<div class="field-summary"><span>${jump ? `当前横杆 <b>${jumpHeight(event)} cm</b>` : `已录 ${event.competitors.reduce((sum, athlete) => sum + athlete.attempts.length, 0)} 次`}</span>
+  return `<section class="panel operations-panel operations-panel--field" aria-label="比赛操作">
+    <div class="field-summary"><span>${jump ? `当前横杆 <b>${jumpHeight(event)} cm</b>` : `已录 ${event.competitors.reduce((sum, athlete) => sum + athlete.attempts.length, 0)} 次`}</span>
       <span>当前最佳 <b>${best ? formatMark(best) : '—'}</b></span>${project === 'shot-put' ? `<span>铅球 ${event.division === 'women' ? 4 : 5} kg</span>` : ''}
-      ${jump ? button(`升至 ${nextJumpHeight(event)} cm`, { action: 'jump-raise', glyph: 'plus', small: true, variant: 'capture', disabled: nextJumpHeight(event) > 300 }) : ''}</div>` :
-      `${clocks(event, phase)}${event.kind === 'track' ? splitProgress(event, phase) : ballPanel(event, phase)}
-      <div class="operation-footer">
-        ${event.splits.length && checkpoints(event).length > 4 ? button('通过记录', { action: 'split-history', glyph: 'list', small: true }) : ''}
-        ${event.kind === 'track' && event.splits.length ? button('撤销上次通过', { action: 'split-undo', small: true }) : ''}
-        ${button('校时', { action: 'clock-set', glyph: 'timer', small: true, disabled: phase === 'running' })}
-        ${button('重置', { action: 'clock-reset', glyph: 'reset', small: true, disabled: phase === 'ready' })}
-      </div>`}
+      ${jump ? button(`升至 ${nextJumpHeight(event)} cm`, { action: 'jump-raise', glyph: 'plus', small: true, variant: 'capture', disabled: nextJumpHeight(event) > 300 }) : ''}</div>
   </section>`;
 }
 
@@ -160,7 +121,7 @@ export function rosterTools(event) {
     ${button('导出', { action: 'csv-export', glyph: 'download', small: true, accessible: '导出 CSV' })}`;
 }
 
-export function competitorPanel(event, now, { start, limit, onAir }) {
+export function competitorPanel(event, { start, limit, onAir }) {
   if (!event) return '<p class="empty-table">选择赛事后显示名单。</p>';
   if (event.kind === 'match') return `<div class="match-summary">
     <span>${h(event.homeName)} <b>${event.score.home}</b></span><span>${h(event.awayName)} <b>${event.score.away}</b></span>
@@ -168,20 +129,17 @@ export function competitorPanel(event, now, { start, limit, onAir }) {
   const isField = event.kind === 'field';
   const heightTrials = event.schedule?.project === 'high-jump';
   const mixedRelay = event.schedule?.project === 'shuttle-50';
-  const active = clockPhase(event, now) === 'running';
   const rowHtml = roster(event).slice(start, start + limit).map((athlete) => {
     const attempts = heightTrials ? (athlete.jumps ?? []).map(({ height, outcome }) => `${height}${outcome}`).join(' / ') :
       athlete.attempts.map((attempt) => typeof attempt === 'number' ? formatMark(attempt).replace(' m', '') : attempt).join(' / ');
     const canAttempt = heightTrials ? (canJump(event, athlete) || athlete.jumps?.length) : ['pending', 'ok', 'NM'].includes(athlete.status) && athlete.attempts.length < 12;
     const note = [athlete.team, event.kind === 'track' && event.schedule ? `第 ${athlete.heat ?? 1} 组` : '', mixedRelay ? relayRegistration(athlete) : ''].filter(Boolean).join(' · ');
-    const isOffHeat = (athlete.heat ?? 1) !== (event.heat ?? 1);
     return `<tr>
       <td class="table-lane">${athlete.lane ?? '—'}</td><td class="table-bib tabular" title="${h(athlete.bib)}">${h(athlete.bib || '—')}</td>
       <th class="roster-name" scope="row" title="${h([athlete.name, note].filter(Boolean).join(' · '))}"><span>${h(athlete.name)}</span>${note ? `<small class="${mixedRelay && relayRegistration(athlete) === '人数不符' ? 'relay-invalid' : ''}">${h(note)}</small>` : ''}</th>
       <td class="table-result" title="${h(attempts || resultText(athlete, event))}"><strong class="tabular">${h(resultText(athlete, event))}</strong>${attempts ? `<small class="attempts">${h(attempts)}</small>` : ''}</td>
       <td><div class="row-actions">
-        ${isField ? button('记试次', { action: 'attempt', key: athlete.id, small: true, variant: 'capture', disabled: !canAttempt }) :
-          event.kind === 'track' ? button('记完赛', { action: 'athlete-finish', key: athlete.id, small: true, variant: 'capture', disabled: !onAir || !active || isOffHeat || athlete.status !== 'pending' }) : ''}
+        ${isField ? button('记试次', { action: 'attempt', key: athlete.id, small: true, variant: 'capture', disabled: !canAttempt }) : ''}
         ${button(`编辑 ${athlete.name}`, { action: 'athlete-edit', key: athlete.id, glyph: 'edit', iconOnly: true })}
         ${button(`人物条 ${athlete.name}`, { action: 'athlete-graphic', key: athlete.id, glyph: 'person', iconOnly: true, disabled: !onAir })}
       </div></td></tr>`;
@@ -191,21 +149,26 @@ export function competitorPanel(event, now, { start, limit, onAir }) {
     <tbody>${rowHtml}</tbody></table>` : '<p class="empty-table">还没有选手，可添加或导入 CSV。</p>';
 }
 
-export function moduleList(state, event) {
+export function moduleList(state, event, selected) {
   return Object.entries(MODULES).filter(([key]) => !['results', 'teams', 'score'].includes(key) && applicable(key, event)).map(([key, meta]) => {
-    const live = state.modules[key].visible;
-    const toggle = button(live ? '隐藏' : '显示', { action: 'module-toggle', key, accessible: `${live ? '隐藏' : '显示'}${meta.title}`, small: true, pressed: live, variant: 'tally-button' });
+    const layout = state.modules[key];
+    const live = layout.visible;
     const total = ['lineup', 'results'].includes(key) ? paginatedCount(event, key) : 1;
-    return `<div class="module-item ${live ? 'module-item--live' : ''}">
-      <div class="module-row">
-        ${['notice', 'athlete'].includes(key) ? `<button class="module-label edit-text" type="button" data-action="text" data-key="${key}" title="编辑${meta.title}">${icon(meta.icon)}${meta.title}</button>` : `<span class="module-label">${icon(meta.icon)}${meta.title}</span>`}
-        ${toggle}
+    const rect = modulePosition(key, layout);
+    const width = Math.min(100, MODULES[key].w * layout.scale / 1920);
+    const height = Math.min(100, MODULES[key].h * layout.scale / 1080);
+    const map = `<span class="module-map" aria-hidden="true"><span class="module-map-rect" style="left:${(rect.x / 1920 * 100).toFixed(1)}%;top:${(rect.y / 1080 * 100).toFixed(1)}%;width:${width.toFixed(1)}%;height:${height.toFixed(1)}%"></span></span>`;
+    return `<div class="module-card${key === selected ? ' active' : ''}${live ? ' live' : ''}">
+      <button class="module-item" type="button" data-action="module-select" data-key="${key}" aria-pressed="${key === selected}">
+        <span class="module-copy"><strong>${meta.title}</strong>
+          <span class="module-state">${live ? '画面中' : '未显示'}</span>
+          <span class="module-meta">X ${layout.x} · Y ${layout.y} · ${layout.scale}%</span></span>
+        ${map}
+      </button>
+      <div class="module-foot">
+        ${button(live ? '隐藏' : '显示', { action: 'module-toggle', key, accessible: `${live ? '隐藏' : '显示'}${meta.title}`, small: true, pressed: live, variant: 'tally-button' })}
+        ${live && total > 1 ? `<span class="page-steps">${button('上一页', { action: 'page', key, value: state.pages[key] - 1, glyph: 'left', iconOnly: true, disabled: state.pages[key] === 0 })}<span aria-live="polite">${state.pages[key] + 1} / ${total}</span>${button('下一页', { action: 'page', key, value: state.pages[key] + 1, glyph: 'right', iconOnly: true, disabled: state.pages[key] === total - 1 })}</span>` : ''}
       </div>
-      ${live && total > 1 ? `<div class="page-steps">
-        ${button('上一页', { action: 'page', key, value: state.pages[key] - 1, glyph: 'left', iconOnly: true, disabled: state.pages[key] === 0 })}
-        <span aria-live="polite">${state.pages[key] + 1} / ${total}</span>
-        ${button('下一页', { action: 'page', key, value: state.pages[key] + 1, glyph: 'right', iconOnly: true, disabled: state.pages[key] === total - 1 })}
-        </div>` : ''}
     </div>`;
   }).join('');
 }
@@ -224,23 +187,23 @@ export function select(label, name, values, selected) {
 
 export function inspector({ state, key }) {
   const layout = state.modules[key];
-  const { scale, opacity, enter, exit, duration } = layout;
-  const { x, y } = modulePosition(key, layout);
-  const bounds = moduleBounds(key, scale);
+  const bounds = moduleBounds(key, layout.scale);
+  const slider = (label, name, value, min, max, unit = '') => `<div class="field"><span class="field-label">${label}</span>
+    <div class="slider-line"><input class="range-input" type="range" data-range="${name}" min="${min}" max="${max}" step="1" value="${value}" aria-label="${label}">
+      <div class="number-unit"><input name="${name}" type="number" min="${min}" max="${max}" required value="${value}">${unit ? `<span>${unit}</span>` : ''}</div></div></div>`;
   return `<form id="layout-form" class="layout-form" novalidate>
-    <div class="layout-head">
-      ${select('调整图层', 'module', Object.fromEntries(Object.entries(MODULES).filter(([filter]) => applicable(filter, state.events.find((event) => event.id === state.activeEventId))).map(([id, meta]) => [id, meta.title])), key)}
-      <div class="layout-tabs" aria-label="图层设置类别">${button('位置', { action: 'layout-section', key: 'position', small: true, pressed: true })}${button('样式', { action: 'layout-section', key: 'style', small: true, pressed: false })}</div>
-    </div>
-    <div class="layout-section" data-layout-section="position">
-      <div class="field-triple">${input('水平 X', 'x', x, `type="number" min="0" max="${bounds.x}" required`)}${input('垂直 Y', 'y', y, `type="number" min="0" max="${bounds.y}" required`)}${input('缩放 %', 'scale', scale, `type="number" min="35" max="${moduleScaleLimit(key)}" required`)}</div>
+    <div class="switch-row"><div class="switch-copy"><strong>${MODULES[key].title}</strong><small>${layout.visible ? '显示中 · 关闭后按退场动画离开画面' : '未显示 · 打开后按入场动画进入画面'}</small></div>
+      <button type="button" class="switch" data-action="module-toggle" data-key="${key}" aria-pressed="${layout.visible}" aria-label="${layout.visible ? '隐藏' : '显示'}${MODULES[key].title}"><span></span></button></div>
+    <div class="settings-section"><h3><span>01</span>位置</h3>
+      <div class="field-grid">${slider('水平 X', 'x', layout.x, 0, bounds.x, 'px')}${slider('垂直 Y', 'y', layout.y, 0, bounds.y, 'px')}</div>
+      ${slider('整体大小', 'scale', layout.scale, 35, moduleScaleLimit(key), '%')}
       <div class="anchor-buttons">${[['tl', '左上'], ['tr', '右上'], ['bl', '左下'], ['br', '右下']].map(([anchor, name]) => button(name, { action: 'anchor', key: anchor, small: true })).join('')}</div>
-      <p class="form-note">四角按钮会对齐到安全区，图层过大时会相应缩小。上屏图层可在监看中拖动。</p>
+      <p class="form-note">四角按钮对齐到安全区；也可以直接在监看里拖动已上屏的图层。</p>
     </div>
-    <div class="layout-section" data-layout-section="style" hidden>
-      <div class="field-pair">${input('不透明度 %', 'opacity', opacity, 'type="number" min="0" max="100" required')}${input('动画时长 ms', 'duration', duration, 'type="number" min="80" max="2000" required')}</div>
-      <div class="field-pair">${select('入场', 'enter', MOTIONS, enter)}${select('退场', 'exit', MOTIONS, exit)}</div>
+    <div class="settings-section"><h3><span>02</span>外观</h3>
+      <div class="field-grid">${slider('不透明度', 'opacity', layout.opacity, 0, 100, '%')}${slider('动画时长', 'duration', layout.duration, 80, 2000, 'ms')}</div>
+      <div class="field-pair">${select('出场动画', 'enter', MOTIONS, layout.enter)}${select('退场动画', 'exit', MOTIONS, layout.exit)}</div>
     </div>
-    <div class="layout-buttons">${button('恢复此项', { action: 'layout-reset', small: true })}<button class="button primary compact" type="submit">应用设置</button></div>
+    <div class="layout-buttons">${button('恢复默认', { action: 'layout-reset', small: true })}<button class="button primary compact" type="submit">应用设置</button></div>
   </form>`;
 }

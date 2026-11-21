@@ -26,7 +26,6 @@ html, body, #stage { background: transparent !important; }
 .layer.is-editable { pointer-events: auto; cursor: move; outline: 4px dashed #edbc83; outline-offset: 8px; touch-action: none; z-index: 4; }
 .layer--brand { width: 609px; }
 .layer--event { width: 680px; }
-.layer--clock { width: 400px; }
 .layer--score { width: 660px; }
 .layer--lineup { width: 860px; }
 .layer--results { width: 800px; }
@@ -63,7 +62,7 @@ html, body, #stage { background: transparent !important; }
   mask-composite: intersect;
 }
 .ticket-body { position: relative; isolation: isolate; display: flex; flex-direction: column; justify-content: center; min-width: 0; padding: 6px 16px 9px 57px; background: linear-gradient(104deg, var(--wine), var(--wine-dark)); }
-.ticket-body::before, .time-ribbon::before, .table-board header::before {
+.ticket-body::before, .table-board header::before {
   content: '';
   position: absolute;
   z-index: -1;
@@ -78,22 +77,6 @@ html, body, #stage { background: transparent !important; }
 .ticket-stub { display: flex; align-items: center; justify-content: center; gap: 8px; border-left: 3px dashed #b68e86; background: var(--paper); color: var(--wine); }
 .ticket-stub .school-seal { width: 45px; height: 45px; }
 .ticket-stub span { font-size: 48px; line-height: 1; font-weight: 830; font-variant-numeric: tabular-nums; }
-
-.time-ribbon {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  min-height: 111px;
-  padding: 8px 11px 8px 39px;
-  border-top: 4px solid var(--accent);
-  border-radius: 7px;
-  background: linear-gradient(110deg, var(--wine), var(--wine-dark));
-  text-align: center;
-}
-.time-ribbon::before { left: 14px; width: 12px; }
-.time-label { color: #efdbc4; font-size: 23px; line-height: 26px; font-weight: 650; }
-.time-number { font-size: 63px; line-height: 1.03; font-weight: 790; font-variant-numeric: tabular-nums; }
-.time-progress { border-top: 1px solid #edcb9c64; color: #f8e5cf; font-size: 21px; line-height: 30px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .score-ribbon {
   display: grid;

@@ -5,11 +5,12 @@ import { button, competitorPanel, currentEventPicker, divisionPicker, icon, insp
 import { createRanking } from './ranking.js';
 import { createMeetDesk, raceActions } from './meet-control.js';
 import { classStandings, finalFor, onProgram, topRows } from './meet-program.js';
-import { GRADES, MODULES, activeEvent, applicable, clamp, clockPhase, clockValue, eventRound, eventTitle, formatTime, jumpHeight, moduleBounds, nextJumpHeight, safeAnchor, sameProject } from './sport.js';
+import { GRADES, MODULES, activeEvent, applicable, clamp, eventRound, eventTitle, jumpHeight, moduleBounds, modulePosition, nextJumpHeight, safeAnchor, sameProject } from './sport.js';
 
 const $ = (selector) => document.querySelector(selector);
-const workspace = $('.workspace');
-const monitor = $('.monitor-body');
+const workspace = $('.app-shell');
+const stages = Array.from(document.querySelectorAll('.preview-stage, .focus-stage'));
+const canvas = document.querySelector('.monitor-canvas');
 const preview = $('#preview');
 const output = pageUrl('overlay');
 const connection = $('#connection');
@@ -17,16 +18,13 @@ const layoutPane = $('#layout-inspector');
 const rosterView = { page: 0, limit: 4 };
 const regionMarkup = new WeakMap();
 let state;
-let currentPhase;
 let switchingFocus = false;
 let renderedEventId;
 let renderedRosterId;
 let preparedId = '';
 let toastTimer;
-let layoutOpen = false;
 let layoutKey = 'brand';
 let layoutDirty = false;
-let layoutSection = 'position';
 let layoutModel;
 let backdrop = 'grid';
 let guides = true;
@@ -51,9 +49,9 @@ if (demo) {
   $('#copy-output span').textContent = '复制彩排地址';
   $('#copy-output').setAttribute('aria-label', '复制彩排地址');
 }
-$('#monitor-backdrop').value = backdrop;
-monitor.dataset.backdrop = backdrop;
+for (const stage of stages) stage.dataset.backdrop = backdrop;
 $('#monitor-guides').checked = guides;
+syncBackdropButtons();
 
 function setWorkspace(key) {
   workspace.dataset.workspace = key;
@@ -70,21 +68,24 @@ function setTableView(view) {
   setWorkspace('work');
 }
 
+function syncBackdropButtons() {
+  document.querySelectorAll('[data-action="backdrop"]').forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.key === backdrop)));
+}
+
 function saveMonitorPreferences() {
-  backdrop = $('#monitor-backdrop').value;
-  monitor.dataset.backdrop = backdrop;
+  for (const stage of stages) stage.dataset.backdrop = backdrop;
   guides = $('#monitor-guides').checked;
   try { localStorage.setItem('yanzhou-sports-preview', JSON.stringify({ backdrop, guides })); } catch { /* The current preview still updates. */ }
   tellPreview();
 }
-$('#monitor-backdrop').addEventListener('change', saveMonitorPreferences);
 $('#monitor-guides').addEventListener('change', saveMonitorPreferences);
 
 function tellPreview(extra = {}) {
-  preview.contentWindow?.postMessage({ type: 'preview:settings', editKey: layoutOpen ? layoutKey : '', guides, ...extra }, location.origin);
+  preview.contentWindow?.postMessage({ type: 'preview:settings', editKey: layoutKey, guides, ...extra }, location.origin);
 }
 preview.addEventListener('load', () => tellPreview());
 preview.src = pageUrl('overlay', { preview: '1' });
+$('#focus-frame').src = pageUrl('overlay');
 
 const client = new SportsClient({
   role: 'control',
@@ -115,25 +116,54 @@ async function run(action, args, message) {
 }
 
 function renderLayout() {
-  $('#open-layout').setAttribute('aria-pressed', String(layoutOpen));
-  $('#layer-controls').hidden = layoutOpen;
-  $('#layer-count').hidden = layoutOpen;
-  $('#close-layout').hidden = !layoutOpen;
-  layoutPane.hidden = !layoutOpen;
-  if (!layoutOpen || layoutDirty) return;
-  const model = JSON.stringify([layoutKey, state.modules[layoutKey], activeEvent(state)?.kind]);
-  if (layoutModel !== model) {
-    layoutPane.innerHTML = inspector({ state, key: layoutKey });
-    layoutModel = model;
+  if (!layoutDirty) {
+    const model = JSON.stringify([layoutKey, state.modules[layoutKey], activeEvent(state)?.kind]);
+    if (layoutModel !== model) {
+      layoutPane.innerHTML = inspector({ state, key: layoutKey });
+      layoutModel = model;
+    }
   }
-  setLayoutSection(layoutSection);
+  updateFocus();
 }
 
-function setLayoutSection(section) {
-  layoutSection = section;
-  for (const node of layoutPane.querySelectorAll('[data-layout-section]')) node.hidden = node.dataset.layoutSection !== section;
-  for (const node of layoutPane.querySelectorAll('[data-action="layout-section"]')) node.setAttribute('aria-pressed', String(node.dataset.key === section));
+function editLayout() {
+  if (!layoutDirty) return state.modules[layoutKey];
+  const form = $('#layout-form');
+  if (!form) return state.modules[layoutKey];
+  const value = (name) => {
+    const input = form.elements[name];
+    if (!input || input.value === '') return state.modules[layoutKey][name];
+    const parsed = Number(input.value);
+    return Number.isFinite(parsed) ? parsed : state.modules[layoutKey][name];
+  };
+  return { ...state.modules[layoutKey], x: value('x'), y: value('y'), scale: value('scale') };
 }
+
+function updateFocus() {
+  const frame = $('#focus-frame');
+  const stage = document.querySelector('.focus-stage');
+  if (!frame || !stage || !state) return;
+  const meta = MODULES[layoutKey];
+  $('#focus-title').textContent = `${meta.title} · 局部放大`;
+  const layout = editLayout();
+  const width = meta.w * layout.scale / 100;
+  const height = meta.h * layout.scale / 100;
+  const box = stage.getBoundingClientRect();
+  const fit = Math.min((box.width - 48) / width, (box.height - 48) / height);
+  const scale = clamp(fit, 0.2, 6);
+  const { x, y } = modulePosition(layoutKey, layout);
+  frame.style.transform = `translate(${((box.width - width * scale) / 2 - x * scale).toFixed(1)}px, ${((box.height - height * scale) / 2 - y * scale).toFixed(1)}px) scale(${scale.toFixed(3)})`;
+  $('#focus-scale').textContent = `${Math.round(scale * 100)}%`;
+}
+
+new ResizeObserver(() => updateFocus()).observe(document.querySelector('.focus-stage'));
+new ResizeObserver(([entry]) => {
+  const width = Math.max(0, Math.min(entry.contentRect.width, entry.contentRect.height * 16 / 9));
+  canvas.style.width = `${width.toFixed(1)}px`;
+  canvas.style.height = `${(width * 9 / 16).toFixed(1)}px`;
+  const zoom = $('#preview-zoom');
+  if (zoom) zoom.textContent = width > 40 ? `${Math.round(width / 1920 * 100)}%` : '—';
+}).observe(document.querySelector('.preview-stage'));
 
 function updateRegion(selector, markup) {
   const node = $(selector);
@@ -150,14 +180,14 @@ function updateRegion(selector, markup) {
   }
 }
 
-const ranking = createRanking({ getState: () => state, getTime: () => client.now(), run, notify, updateRegion, confirm: (...args) => dialogs.confirm(...args) });
+const ranking = createRanking({ getState: () => state, run, notify, updateRegion, confirm: (...args) => dialogs.confirm(...args) });
 const meetDesk = createMeetDesk({ getState: () => state, updateRegion });
 
 function rosterEvent() {
   return state.events.find((event) => event.id === preparedId) ?? activeEvent(state);
 }
 
-function renderRoster(now = client.now()) {
+function renderRoster() {
   if (preparedId && !state.events.some((event) => event.id === preparedId)) preparedId = '';
   const event = rosterEvent();
   if (event?.id !== renderedRosterId) rosterView.page = 0;
@@ -169,7 +199,7 @@ function renderRoster(now = client.now()) {
   updateRegion('#roster-tools', rosterTools(event) + (stagedJump ? button(`横杆 ${jumpHeight(event)} cm · 升杆`, {
     action: 'jump-raise', small: true, disabled: nextJumpHeight(event) > 300,
   }) : ''));
-  updateRegion('#roster-rows', competitorPanel(event, now, { start: rosterView.page * rosterView.limit, limit: rosterView.limit, onAir: event?.id === state.activeEventId }));
+  updateRegion('#roster-rows', competitorPanel(event, { start: rosterView.page * rosterView.limit, limit: rosterView.limit, onAir: event?.id === state.activeEventId }));
   updateRegion('#roster-pager', total > 1 ? pager('roster-page', rosterView.page, total, '备赛名单') : '');
   $('#roster-summary').textContent = event && event.kind !== 'match' && event.competitors.length ? `${event.competitors.length} 位选手` : '';
   $('#roster-rows').style.setProperty('--roster-count', String(event?.competitors.length ?? 0));
@@ -185,7 +215,7 @@ function renderLayers(event) {
   const available = Object.keys(MODULES).filter((key) => applicable(key, event));
   const visible = available.filter((key) => state.modules[key].visible).length;
   $('#layer-count').textContent = `画面中 ${visible} / ${available.length}`;
-  updateRegion('#module-list', moduleList(state, event));
+  updateRegion('#module-list', moduleList(state, event, layoutKey));
   updateRegion('#module-footer', button(visible ? '一键清屏' : '恢复基础包装', { action: visible ? 'clear' : 'base', glyph: 'screen', variant: visible ? 'clear-output' : '' }));
 }
 
@@ -203,21 +233,19 @@ function render() {
     layoutModel = undefined;
   }
   if (!applicable(layoutKey, event)) { layoutKey = 'brand'; layoutDirty = false; }
-  const now = client.now();
-  currentPhase = event ? clockPhase(event, now) : null;
   const listed = program.length ? program : state.events;
   updateRegion('#event-divisions', divisionPicker(listed, state.activeEventId));
   updateRegion('#active-event-picker', currentEventPicker(listed, state.activeEventId));
   $('#edit-active').disabled = !event;
-  updateRegion('#operations', operations(event, now));
-  renderRoster(now);
+  updateRegion('#operations', operations(event));
+  $('#work-count').textContent = `${state.events.length} 场赛事`;
+  renderRoster();
   ranking.render();
   updateRegion('#school-race-actions', raceActions(state, event));
   meetDesk.render();
   renderLayers(event);
   renderLayout();
   tellPreview();
-  updateClock(now);
 }
 
 const rosterContainer = $('#roster-rows');
@@ -234,25 +262,6 @@ const paginationObserver = new ResizeObserver(([{ contentRect }]) => {
 });
 paginationObserver.observe(rosterContainer);
 
-function updateClock(now) {
-  const event = state && activeEvent(state);
-  const time = $('#current-time');
-  if (!event || !time) return;
-  const value = formatTime(clockValue(event, now), event.kind === 'track', event.clockMode === 'down');
-  if (time.textContent !== value) time.textContent = value;
-}
-
-function tick() {
-  const event = state && activeEvent(state);
-  if (event && (event.kind === 'track' || event.kind === 'match')) {
-    const now = client.now();
-    if (clockPhase(event, now) !== currentPhase) render();
-    else updateClock(now);
-  }
-  requestAnimationFrame(tick);
-}
-requestAnimationFrame(tick);
-
 async function copyOutput() {
   try { await navigator.clipboard.writeText(output); }
   catch {
@@ -268,17 +277,15 @@ async function copyOutput() {
   notify('已复制 OBS 透明图层地址');
 }
 
-function showLayout(key) {
+function selectModule(key) {
   if (!applicable(key, activeEvent(state))) key = 'brand';
-  layoutOpen = true;
   if (layoutKey !== key) {
     layoutKey = key;
     layoutDirty = false;
-    layoutSection = 'position';
+    layoutModel = undefined;
   }
   setWorkspace('output');
   renderLayout();
-  renderLayers(activeEvent(state));
   tellPreview();
 }
 
@@ -290,21 +297,18 @@ function formScale(form) {
 function updatePositionBounds(form) {
   const bounds = moduleBounds(layoutKey, formScale(form));
   for (const axis of ['x', 'y']) {
+    const range = form.querySelector('[data-range="' + axis + '"]');
     form.elements[axis].max = bounds[axis];
+    if (range) range.max = bounds[axis];
     if (Number(form.elements[axis].value) > bounds[axis]) form.elements[axis].value = bounds[axis];
+    if (range && Number(range.value) > bounds[axis]) range.value = bounds[axis];
   }
 }
 
 async function selectEvent(next) {
   if (!next || next.id === state.activeEventId) return;
-  const event = activeEvent(state);
-  const apply = async () => {
-    await run('event:select', { eventId: next.id });
-    setTableView('ranking');
-  };
-  if (event && clockPhase(event, client.now()) === 'running') {
-    dialogs.confirm('切换当前赛事？', `「${eventTitle(event)}」仍会继续计时，OBS 将切换到「${eventTitle(next)}」。`, '切换赛事', apply);
-  } else await apply();
+  await run('event:select', { eventId: next.id });
+  setTableView('ranking');
 }
 
 const handlers = {
@@ -342,22 +346,10 @@ const handlers = {
       setTableView('roster');
     });
   },
-  async clock({ event, eventId, key }) {
-    await run('clock:action', { eventId, heat: event.heat ?? 1, operation: key });
-    if (key === 'finish' && event.kind === 'track') setTableView('ranking');
-  },
-  'clock-set'({ event }) { dialogs.setClock(event, client.now()); },
-  'clock-reset'({ event, eventId }) {
-    dialogs.confirm('重置计时？', event.kind === 'track' ? '清除当前分组的计时和通过记录。' : '将本节计时恢复到起始值。', '重置计时', () => run('clock:action', { eventId, heat: event.heat ?? 1, operation: 'reset' }));
-  },
-  split({ event, eventId }) { return run('split:add', { eventId, heat: event.heat ?? 1, index: event.splits.length }, '已记录通过'); },
-  'split-history'({ event }) { dialogs.passes(event); },
-  'split-undo'({ event, eventId }) { return run('split:undo', { eventId, heat: event.heat ?? 1, index: event.splits.length }, '已撤销上次通过'); },
   score({ eventId, key, value }) { return run('match:score', { eventId, side: key, delta: value }); },
   period({ eventId, value }) { return run('match:period', { eventId, period: value }); },
   'athlete-add'({ event }) { dialogs.athlete(event); },
   'athlete-edit'({ event, athlete }) { dialogs.athlete(event, athlete); },
-  'athlete-finish'({ event, eventId, key }) { return run('athlete:finish', { eventId, id: key, heat: event.heat ?? 1 }, '已记录完赛'); },
   'athlete-graphic'({ athlete }) { dialogs.text(state, 'athlete', athlete, true); },
   attempt({ event, athlete }) { dialogs.attempt(event, athlete); },
   'jump-raise'({ event, eventId }) { return run('jump:raise', { eventId, height: jumpHeight(event) }, '已升杆'); },
@@ -379,9 +371,8 @@ const handlers = {
   meet() { dialogs.meet(state, output); },
   text({ key }) { dialogs.text(state, key); },
   'work-view'({ key }) { setTableView(key); },
-  'output-home'() { layoutOpen = false; renderLayout(); tellPreview(); },
-  layout() { showLayout(layoutKey); },
-  'layout-section'({ key }) { setLayoutSection(key); },
+  'module-select'({ key }) { selectModule(key); },
+  backdrop() { saveMonitorPreferences(); syncBackdropButtons(); },
   async 'layout-reset'() {
     const eventId = state.activeEventId;
     const key = layoutKey;
@@ -397,6 +388,10 @@ const handlers = {
     form.elements.x.value = x;
     form.elements.y.value = y;
     form.elements.scale.value = scale;
+    for (const axis of ['x', 'y', 'scale']) {
+      const range = form.querySelector('[data-range="' + axis + '"]');
+      if (range) range.value = form.elements[axis].value;
+    }
     updatePositionBounds(form);
     layoutDirty = true;
   },
@@ -406,15 +401,6 @@ $('#active-event-picker').addEventListener('change', async ({ target }) => {
   const next = state.events.find((row) => row.id === target.value);
   target.value = state.activeEventId;
   try { await selectEvent(next); }
-  catch (error) { notify(error.message, true); }
-});
-
-$('#operations').addEventListener('change', async ({ target }) => {
-  if (target.id !== 'heat-select') return;
-  const event = activeEvent(state);
-  const heat = Number(target.value);
-  target.value = event.heat ?? 1;
-  try { await run('heat:select', { eventId: event.id, heat }); }
   catch (error) { notify(error.message, true); }
 });
 
@@ -435,20 +421,21 @@ document.addEventListener('click', async (e) => {
 });
 
 layoutPane.addEventListener('input', (e) => {
-  if (e.target.name === 'module') return;
+  const range = e.target.closest?.('[data-range]');
+  if (range) {
+    const form = range.form;
+    const numberInput = form.elements[range.dataset.range];
+    if (numberInput) numberInput.value = range.value;
+    if (range.dataset.range === 'scale') updatePositionBounds(form);
+  }
   layoutDirty = true;
   if (e.target.name === 'scale') updatePositionBounds(e.target.form);
-});
-
-layoutPane.addEventListener('change', (e) => {
-  if (e.target.name === 'module') showLayout(e.target.value);
 });
 
 layoutPane.addEventListener('submit', async (e) => {
   e.preventDefault();
   const invalid = e.target.querySelector(':invalid');
   if (invalid) {
-    setLayoutSection(invalid.closest('[data-layout-section]').dataset.layoutSection);
     invalid.reportValidity();
     return;
   }
@@ -467,13 +454,16 @@ layoutPane.addEventListener('submit', async (e) => {
 window.addEventListener('message', async ({ source, origin, data }) => {
   if (origin !== location.origin || source !== preview.contentWindow) return;
   if (data?.type === 'preview:ready') tellPreview();
-  if (data?.type !== 'preview:move' || !layoutOpen || data.key !== layoutKey || data.eventId !== state.activeEventId) return;
+  if (data?.type !== 'preview:move' || data.key !== layoutKey || data.eventId !== state.activeEventId) return;
   try {
     await run('module:save', { eventId: data.eventId, key: data.key, patch: { x: data.x, y: data.y } }, '已保存位置');
     if (layoutDirty && layoutKey === data.key && data.eventId === state.activeEventId) {
       const form = $('#layout-form');
-      form.elements.x.value = state.modules[data.key].x;
-      form.elements.y.value = state.modules[data.key].y;
+      for (const axis of ['x', 'y']) {
+        form.elements[axis].value = state.modules[data.key][axis];
+        const range = form.querySelector('[data-range="' + axis + '"]');
+        if (range) range.value = state.modules[data.key][axis];
+      }
     }
   } catch (error) {
     tellPreview({ resetPosition: true });

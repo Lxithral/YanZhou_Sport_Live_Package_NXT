@@ -29,7 +29,7 @@ test('school schedule keeps 800 m and 1000 m while the other events stay comment
   assert.equal(checkInTime(timed[0].schedule.start), '13:50');
   assert.equal(SCHOOL_RACES.filter((event) => event.schedule.round === 'heat').length, 0);
   assert.equal(SCHOOL_RACES.filter(({ schedule }) => schedule.project === 'run-800').length, 4);
-  assert.equal(verifyState(initialState()).version, 6);
+  assert.equal(verifyState(initialState()).version, 7);
 });
 
 test('upgrade removes empty generic presets and retains actual registrations and the current school race', () => {
@@ -40,7 +40,7 @@ test('upgrade removes empty generic presets and retains actual registrations and
   const registered = { ...structuredClone(preset), id: 'run-1000-women', division: 'women', competitors: app.event.competitors };
   const old = { ...app.state, version: 4, events: [blank, registered, ...app.state.events] };
   const updated = verifyState(migrateState(verifyState(old)));
-  assert.equal(updated.version, 6);
+  assert.equal(updated.version, 7);
   assert.equal(updated.activeEventId, old.activeEventId);
   assert.deepEqual(updated.events, [registered, ...app.state.events]);
   const previousActive = verifyState(migrateState({ ...old, activeEventId: blank.id }));
@@ -48,15 +48,13 @@ test('upgrade removes empty generic presets and retains actual registrations and
   assert.strictEqual(migrateState(updated), updated);
 });
 
-test('old rehearsal examples and timing records move into school program events', () => {
+test('old rehearsal examples move into school program events', () => {
   const rehearsal = initialState(true);
   const targets = { 'run-1000': 'school-g1-men-run-1000-final' };
   const legacy = Object.entries(targets).map(([id, targetId]) => {
     const { schedule, ...sample } = rehearsal.events.find((event) => event.id === targetId);
     return { ...sample, id };
   });
-  legacy[0].clock = { phase: 'finished', startedAt: null, elapsed: 182350 };
-  legacy[0].splits = [{ distance: 200, time: 40120 }];
   const blank = initialState();
   const migrated = verifyState(migrateState(verifyState({ ...blank, version: 4, activeEventId: 'run-1000', events: [...legacy, ...blank.events] })));
   assert.equal(migrated.events.length, 6);
@@ -64,7 +62,9 @@ test('old rehearsal examples and timing records move into school program events'
   for (const [id, targetId] of Object.entries(targets)) {
     const selected = migrated.events.find((event) => event.id === targetId);
     const source = legacy.find((event) => event.id === id);
-    for (const key of ['competitors', 'clock', 'splits']) assert.deepEqual(selected[key], source[key]);
+    assert.deepEqual(selected.competitors, source.competitors);
+    assert.equal(selected.clock, undefined);
+    assert.equal(selected.splits, undefined);
   }
 });
 

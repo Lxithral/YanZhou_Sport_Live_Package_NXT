@@ -2,13 +2,12 @@ export const CANVAS = { width: 1920, height: 1080 };
 export const SAFE_AREA = { x: 96, y: 54, padding: 16 };
 export const PAGE_SIZE = 6;
 export const LINEUP_SIZE = 7;
-export const MAX_TIME = 24 * 60 * 60 * 1000;
+const MAX_DURATION = 24 * 60 * 60 * 1000;
 export const MAX_COMPETITORS = 128;
 
 export const MODULES = {
   brand:   { title: 'Logo 挂角', icon: 'image', corner: 'tl', w: 609, h: 118, visible: true },
   event:   { title: '赛事条', icon: 'list', corner: 'bl', w: 680, h: 112, visible: true },
-  clock:   { title: '计时牌', icon: 'timer', corner: 'tr', w: 400, h: 160, visible: true, kind: 'track' },
   score:   { title: '球赛记分牌', icon: 'score', corner: 'tr', w: 660, h: 144, visible: true, kind: 'match' },
   lineup:  { title: '参赛名单', icon: 'people', x: 530, y: 150, w: 860, h: 680, visible: false },
   results: { title: '冠军', icon: 'chart', x: 560, y: 380, w: 800, h: 250, visible: false },
@@ -21,7 +20,6 @@ export const KINDS = { track: '径赛', field: '田赛', match: '球赛', rankin
 export const DIVISIONS = { men: '男子', women: '女子', open: '公开' };
 export const GRADES = { g1: '高一', g2: '高二', staff: '教职工' };
 const GENDER_WORD = /男子|女子|男生|女生|男组|女组/u;
-export const PHASES = { ready: '待发', running: '计时中', paused: '已暂停', finished: '已结束' };
 export const RESULT_STATUS = { pending: '待录入', ok: '有效', DNS: '未出发', DNF: '未完成', DQ: '取消资格', NM: '无有效成绩' };
 export const MOTIONS = { none: '无', fade: '淡入淡出', slide: '下方滑入', side: '左侧滑入', zoom: '缩放' };
 
@@ -40,31 +38,8 @@ export const PRESETS = {
   'high-jump': { name: '跳高', kind: 'field' },
   'shot-put': { name: '铅球', kind: 'field' },
   'staff-teams': { name: '教职工团体赛', kind: 'ranking' },
-  football: { name: '足球', kind: 'match', homeName: '主队', awayName: '客队', clockMode: 'up', periodMinutes: 45, periodLabel: '半场' },
+  football: { name: '足球', kind: 'match', homeName: '主队', awayName: '客队', periodLabel: '半场' },
 };
-
-export function blankClock() {
-  return { phase: 'ready', elapsed: 0, startedAt: null };
-}
-
-export function elapsedTime(clock, now) {
-  return Math.min(MAX_TIME, clock.elapsed + (clock.startedAt === null ? 0 : Math.max(0, now - clock.startedAt)));
-}
-
-export function clockValue(event, now) {
-  const elapsed = elapsedTime(event.clock, now);
-  return event.kind === 'match' && event.clockMode === 'down'
-    ? Math.max(0, event.periodMinutes * 60000 - elapsed)
-    : elapsed;
-}
-
-export function clockPhase(event, now) {
-  if (event.clock.phase === 'running' &&
-      (elapsedTime(event.clock, now) === MAX_TIME || (event.kind === 'match' && event.clockMode === 'down' && clockValue(event, now) === 0))) {
-    return 'finished';
-  }
-  return event.clock.phase;
-}
 
 export function formatTime(ms, fractions = true, roundUp = false) {
   const centiseconds = Math.max(0, Math.floor(ms / 10));
@@ -83,7 +58,7 @@ export function parseTime(source) {
   const parts = value.split(':');
   const seconds = Number(parts.pop()) + (parts.length ? Number(parts[0]) * 60 : 0);
   const ms = Math.round(seconds * 100) * 10;
-  if (ms > MAX_TIME) throw new Error('时长不能超过 24 小时。');
+  if (ms > MAX_DURATION) throw new Error('时长不能超过 24 小时。');
   return ms;
 }
 
@@ -97,15 +72,6 @@ export function parseMark(raw) {
 
 export function formatMark(cm) {
   return `${(cm / 100).toFixed(2)} m`;
-}
-
-export function checkpoints(event) {
-  if (event.kind !== 'track') return [];
-  if (event.legs > 1) return Array.from({ length: event.legs }, (_, i) => (i + 1) * event.distance / event.legs);
-  const first = event.distance % event.trackLength || event.trackLength;
-  const distances = [];
-  for (let distance = first; distance <= event.distance; distance += event.trackLength) distances.push(distance);
-  return distances;
 }
 
 export function activeEvent(state) {

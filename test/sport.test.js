@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyCommand, clientState, initialState, migrateState, verifyState } from '../server/state.js';
 import { csvResults, readCsv } from '../public/csv.js';
-import { MODULES, PRESETS, SAFE_AREA, activeEvent, checkpoints, clockPhase, clockValue, defaultLayout,
+import { MODULES, PRESETS, SAFE_AREA, activeEvent, defaultLayout,
   eventStage, formatTime, moduleBounds, paginatedCount, resultRows, safeAnchor, standings } from '../public/sport.js';
 
 function session(demo = false) {
@@ -16,58 +16,23 @@ function session(demo = false) {
   };
 }
 
-test('1000 m and relay checkpoints follow the course configuration', () => {
-  assert.deepEqual(checkpoints(PRESETS['run-1000']), [200, 600, 1000]);
-  assert.deepEqual(checkpoints({ ...PRESETS['run-1000'], trackLength: 300 }), [100, 400, 700, 1000]);
-  assert.deepEqual(checkpoints(PRESETS['run-800']), [400, 800]);
-  assert.deepEqual(checkpoints(PRESETS['run-100']), [100]);
-  assert.deepEqual(checkpoints(PRESETS['run-1500']), [300, 700, 1100, 1500]);
-  assert.deepEqual(checkpoints(PRESETS['relay-100']), [100, 200, 300, 400]);
-  assert.deepEqual(checkpoints(PRESETS['relay-400']), [400, 800, 1200, 1600]);
-});
-
-test('leader splits, clock pause, finish order, and timer reset are independent', () => {
+test('timing commands are removed from the state API', () => {
   const app = session(true);
-  const clock = (operation, at, value) => app.send('clock:action', { operation, value }, at);
-  clock('start', 1000);
-  app.send('split:add', { index: 0 }, 40000);
-  assert.throws(() => app.send('split:add', { index: 0 }, 42000), /通过点已更新/);
-  clock('pause', 60000);
-  assert.equal(clockValue(app.event, 99000), 59000);
-  clock('resume', 66000);
-  app.send('split:add', { index: 1 }, 120010);
-  app.send('split:add', { index: 2 }, 189100);
-  const [a, b, c] = app.event.competitors;
-  app.send('athlete:finish', { id: b.id }, 189500);
-  app.send('athlete:finish', { id: a.id }, 193222);
-  app.send('athlete:finish', { id: c.id }, 193227);
-  assert.throws(() => app.send('athlete:finish', { id: b.id }, 194000), /已录入/);
-  assert.equal(clockPhase(app.event, 194000), 'running');
-  clock('finish', 204000);
-  assert.equal(clockValue(app.event, 300000), 197000);
-  assert.deepEqual(app.event.splits.map(({ distance, time }) => [distance, time]), [[200, 39000], [600, 113010], [1000, 182100]]);
-  assert.deepEqual(standings(app.event).slice(0, 3).map(({ athlete, rank, value }) => [athlete.id, rank, value]),
-    [[b.id, 1, 182500], [a.id, 2, 186220], [c.id, 2, 186220]]);
-  clock('reset', 300001);
-  assert.equal(app.event.clock.elapsed, 0);
-  assert.deepEqual(app.event.splits, []);
-  assert.equal(app.event.competitors[0].time, 186220);
+  assert.throws(() => app.send('clock:action', { operation: 'start' }), /无法识别的操作/);
+  assert.throws(() => app.send('split:add', { index: 0 }), /无法识别的操作/);
+  assert.throws(() => app.send('athlete:finish', { id: app.event.competitors[0].id }), /无法识别的操作/);
 });
 
-test('custom match countdown reaches zero and the next period preserves scores', () => {
+test('match scores and periods are recorded without a clock', () => {
   const app = session();
-  app.send('event:save', { fields: { ...PRESETS.football, clockMode: 'down', periodMinutes: 10 } });
-  assert.equal(clockValue(app.event, 0), 600000);
-  app.send('clock:action', { operation: 'set', value: '00:03' });
-  app.send('clock:action', { operation: 'resume' }, 1000);
-  assert.throws(() => app.send('match:period', { period: 2 }, 3000), /暂停/);
-  app.send('match:score', { side: 'home', delta: 3 }, 3000);
-  app.send('match:score', { side: 'away', delta: -1 }, 3001);
-  assert.equal(clockValue(app.event, 4100), 0);
-  assert.equal(clockPhase(app.event, 4100), 'finished');
-  app.send('match:period', { period: 2 }, 4101);
-  assert.equal(clockValue(app.event, 4102), 600000);
+  app.send('event:save', { fields: PRESETS.football });
+  assert.deepEqual(app.event.score, { home: 0, away: 0, period: 1 });
+  app.send('match:score', { side: 'home', delta: 3 });
+  app.send('match:score', { side: 'away', delta: -1 });
+  app.send('match:period', { period: 2 });
   assert.deepEqual(app.event.score, { home: 3, away: 0, period: 2 });
+  assert.equal(app.event.clock, undefined);
+  assert.equal(app.event.periodMinutes, undefined);
 });
 
 test('early roster import leaves the current event live, and manual results work without times', () => {
@@ -108,7 +73,7 @@ test('legacy basketball is removed without deleting other events or modifying st
   const { events, ...previous } = clientState(app.state, false);
   const oldEvents = events.slice(-2).map(({ division, ...event }) => ({ ...event, stage: eventStage({ ...event, division }) }));
   const next = verifyState(migrateState(verifyState({ ...previous, events: oldEvents, version: 1 })));
-  assert.equal(next.version, 6);
+  assert.equal(next.version, 7);
   assert.equal(activeEvent(next).id, football.id);
   assert.deepEqual(activeEvent(next).score, football.score);
   assert.ok(next.events.every(({ name }) => name !== '篮球'));
@@ -172,8 +137,9 @@ test('layout bounds, single result board and clear are enforced on the server mo
   app.send('module:clear');
   assert.ok(Object.values(app.event.graphics.modules).every(({ visible }) => !visible));
   app.send('module:base');
-  assert.equal(app.event.graphics.modules.clock.visible, true);
+  assert.equal(app.event.graphics.modules.brand.visible, true);
   assert.equal(app.event.graphics.modules.results.visible, false);
+  assert.equal(Object.hasOwn(app.event.graphics.modules, 'clock'), false);
 });
 
 test('default positions and the four corners fit the same guide rectangle', () => {
@@ -191,24 +157,27 @@ test('default positions and the four corners fit the same guide rectangle', () =
   assert.ok(athlete.y + MODULES.athlete.h < event.y);
 });
 
-test('upgrading saved events moves old default corners and preserves custom layout and timing', () => {
+test('upgrading saved events drops timing data and the clock layer', () => {
   const old = initialState(true);
-  old.version = 5;
+  old.version = 6;
   const race = activeEvent(old);
   Object.assign(race.graphics.modules.brand, { x: 48, y: 34, opacity: 65, visible: false });
   Object.assign(race.graphics.modules.event, { x: 48, y: 931 });
-  Object.assign(race.graphics.modules.clock, { x: 1300, y: 100 });
+  race.graphics.modules.clock = { visible: true, x: 1300, y: 100, scale: 100, opacity: 100, enter: 'fade', exit: 'fade', duration: 260 };
   Object.assign(old.standby.modules.brand, { x: 48, y: 34 });
   race.clock = { phase: 'finished', elapsed: 180400, startedAt: null };
+  race.splits = [{ distance: 200, time: 40000 }];
+  race.heatRuns = { 2: { clock: { phase: 'ready', elapsed: 0, startedAt: null }, splits: [] } };
   const next = verifyState(migrateState(verifyState(old)));
   const fixed = activeEvent(next);
   assert.deepEqual(fixed.graphics.modules.brand, { ...defaultLayout('brand'), opacity: 65, visible: false });
   assert.deepEqual(fixed.graphics.modules.event, defaultLayout('event'));
-  assert.deepEqual(fixed.graphics.modules.clock, race.graphics.modules.clock);
-  assert.deepEqual(fixed.clock, race.clock);
+  assert.equal(fixed.graphics.modules.clock, undefined);
+  assert.equal(fixed.clock, undefined);
+  assert.equal(fixed.splits, undefined);
+  assert.equal(fixed.heatRuns, undefined);
   assert.deepEqual(next.standby.modules.brand, defaultLayout('brand'));
-  const reset = applyCommand(next, { action: 'module:reset', eventId: fixed.id, key: 'clock' }, 0);
-  assert.deepEqual(activeEvent(reset).graphics.modules.clock, defaultLayout('clock'));
+  assert.equal(next.standby.modules.clock, undefined);
   assert.strictEqual(migrateState(next), next);
 });
 

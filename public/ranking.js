@@ -1,10 +1,9 @@
 import { escapeHtml as h } from './client.js';
 import { button, pager, rosterTools } from './control-views.js';
-import { activeEvent, canJump, canRank, clamp, clockPhase, lineupRoster, resultRows, resultText, standings } from './sport.js';
+import { activeEvent, canJump, canRank, clamp, resultRows, resultText, standings } from './sport.js';
 import { beatsRecord } from './meet-program.js';
 
-function tableRows(event, entries, now) {
-  const running = event.kind === 'track' && clockPhase(event, now) === 'running';
+function tableRows(event, entries) {
   return entries.map((entry) => {
     if (entry.drop) return '<div class="rank-slot" data-rank-drop role="row"><span role="cell" aria-colspan="6">拖到这里确认名次</span></div>';
     const { athlete, rank } = entry;
@@ -13,9 +12,9 @@ function tableRows(event, entries, now) {
       ['pending', 'ok', 'NM'].includes(athlete.status) && athlete.attempts.length < 12);
     const placement = rank !== null
       ? button('撤回', { action: 'rank-return', key: athlete.id, accessible: '撤回名次 ' + athlete.name, small: true, iconOnly: trial, glyph: trial ? 'left' : undefined })
-      : eligible ? button(running && athlete.status === 'pending' ? '记完赛' : '入榜', {
-        action: running && athlete.status === 'pending' ? 'athlete-finish' : 'rank-append', key: athlete.id,
-        accessible: (running && athlete.status === 'pending' ? '记完赛 ' : '入榜 ') + athlete.name, small: true, variant: 'capture', iconOnly: trial, glyph: trial ? 'plus' : undefined,
+      : eligible ? button('入榜', {
+        action: 'rank-append', key: athlete.id,
+        accessible: '入榜 ' + athlete.name, small: true, variant: 'capture', iconOnly: trial, glyph: trial ? 'plus' : undefined,
       }) : '';
     const trialControl = trial ? button('记试次', { action: 'attempt', key: athlete.id, accessible: '记试次 ' + athlete.name, small: true, variant: 'capture' }) : '';
     const grip = eligible ? button(`拖动 ${athlete.name}`, { action: 'rank-grip', key: athlete.id, glyph: 'grip', iconOnly: true, variant: 'rank-grip' }) : '';
@@ -33,7 +32,7 @@ function tableRows(event, entries, now) {
   }).join('');
 }
 
-export function createRanking({ getState, getTime, run, notify, updateRegion, confirm }) {
+export function createRanking({ getState, run, notify, updateRegion, confirm }) {
   const panel = document.querySelector('#ranking-panel');
   const output = document.querySelector('#rank-controls');
   const table = panel.querySelector('.rank-table');
@@ -43,20 +42,16 @@ export function createRanking({ getState, getTime, run, notify, updateRegion, co
   let page = 0;
   let limit = 9;
   let renderedId;
-  let shownHeat;
   let drag;
 
   function render() {
     const state = getState();
     if (!state) return;
     const event = activeEvent(state);
-    const now = getTime();
-    const heat = event?.kind === 'track' && event.schedule && clockPhase(event, now) === 'running' ? event.heat ?? 1 : null;
-    if (event?.id !== renderedId || shownHeat !== heat) {
+    if (event?.id !== renderedId) {
       page = 0;
       search.value = '';
       renderedId = event?.id;
-      shownHeat = heat;
     }
     if (drag && drag.eventId !== renderedId) endDrag();
     const available = Boolean(event && event.kind !== 'match');
@@ -70,10 +65,10 @@ export function createRanking({ getState, getTime, run, notify, updateRegion, co
     updateRegion('#rank-mobile-action', event ? show : '');
     updateRegion('#rank-data-tools', available ? rosterTools(event) : '');
     updateRegion('#rank-reset-control', available && event.rankOrder ? button('恢复按成绩', { action: 'rank-reset', small: true }) : '');
-    panel.querySelector('#rank-mode').textContent = heat ? `第 ${heat} 组计时` : available && event.competitors.length ? (event.rankOrder ? '手动排名' : '按成绩') : '';
+    panel.querySelector('#rank-mode').textContent = available && event.competitors.length ? (event.rankOrder ? '手动排名' : '按成绩') : '';
     search.disabled = !available || !event.competitors.length;
     const current = available ? standings(event) : [];
-    const all = heat ? current.filter(({ athlete }) => (athlete.heat ?? 1) === heat) : current;
+    const all = current;
     const term = search.value.trim().toLocaleLowerCase();
     const matches = term ? all.filter(({ athlete }) => [athlete.name, athlete.bib, athlete.team].some(value => value.toLocaleLowerCase().includes(term))) : all;
     const placed = matches.filter(({ rank }) => rank !== null);
@@ -83,12 +78,12 @@ export function createRanking({ getState, getTime, run, notify, updateRegion, co
     table.hidden = !items.length;
     empty.hidden = Boolean(items.length);
     empty.textContent = !event ? '选择赛事后即可导入选手和排名。' :
-      !available ? '球赛比分可在计时区操作。' :
-        term ? '没有符合条件的选手。' : (heat && !lineupRoster(event).length ? '当前计时分组没有选手。' : '还没有选手。先导入 CSV 或添加选手。');
+      !available ? '球赛比分可在上方记分区操作。' :
+        term ? '没有符合条件的选手。' : '还没有选手。先导入 CSV 或添加选手。';
     rowsNode.style.setProperty('--rank-count', String(items.length));
     const total = Math.max(1, Math.ceil(items.length / limit));
     page = clamp(page, 0, total - 1);
-    updateRegion('#rank-rows', tableRows(event, items.slice(page * limit, (page + 1) * limit), now));
+    updateRegion('#rank-rows', tableRows(event, items.slice(page * limit, (page + 1) * limit)));
     updateRegion('#rank-pager', total > 1 ? pager('rank-page', page, total, '选手') : '');
     panel.querySelector('#rank-summary').textContent = available && all.length
       ? (term ? matches.length + ' / ' + all.length + ' 位选手' : all.length + ' 位选手') + ' · ' + all.filter(({ rank }) => rank !== null).length + ' 已排名'

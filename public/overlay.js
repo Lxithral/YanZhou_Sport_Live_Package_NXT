@@ -1,7 +1,7 @@
 import { SportsClient, demo, escapeHtml as h } from './client.js';
 import {
-  CANVAS, GRADES, LINEUP_SIZE, MODULES, PHASES, SAFE_AREA, activeEvent, applicable, checkpoints, clamp, clockPhase, clockValue, formatTime, heats,
-  eventTitle, lineupRoster, moduleBounds, modulePosition, paginatedCount, standings,
+  CANVAS, GRADES, LINEUP_SIZE, MODULES, SAFE_AREA, activeEvent, applicable, clamp, heats,
+  lineupRoster, moduleBounds, modulePosition, paginatedCount, standings,
 } from './sport.js';
 import { className } from './meet-program.js';
 
@@ -34,6 +34,7 @@ function resize() {
   stage.style.transform = `translate(-50%, -50%) scale(${ratio})`;
 }
 window.addEventListener('resize', resize);
+new ResizeObserver(resize).observe(document.documentElement);
 resize();
 
 const LANE_WORDS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
@@ -128,14 +129,6 @@ function sportsGraphic(key, event) {
       return `<div class="event-ribbon"><div class="ticket-body"><strong>${h(event.name)}</strong>${context ? `<small>${h(context)}</small>` : ''}</div>
         <div class="ticket-stub">${seal}<span>${String(state.eventNumber).padStart(2, '0')}</span></div></div>`;
     }
-    case 'clock': {
-      const last = event.splits.at(-1);
-      const points = checkpoints(event);
-      const remaining = event.distance - (last?.distance ?? 0);
-      const progress = last && remaining === 0 ? `头名冲线 ${formatTime(last.time)}` :
-        last ? `通过 ${last.distance} m · 剩 ${remaining} m` : (points.length > 1 ? `首个通过点 ${points[0]} m` : '');
-      return `<div class="time-ribbon"><div class="time-label">计时 / <span data-phase></span></div><div class="time-number" data-time></div>${progress ? `<div class="time-progress">${h(progress)}</div>` : ''}</div>`;
-    }
     // case 'score': 球赛记分牌先不用。
     // case 'teams': 班级积分榜先不用。
     case 'lineup': return lineupGraphic(event);
@@ -216,24 +209,6 @@ function render(snapshot) {
 }
 
 const client = new SportsClient({ role: 'view', onState: render });
-
-function updateTime() {
-  const event = state && activeEvent(state);
-  if (event && (event.kind === 'track' || event.kind === 'match')) {
-    const layer = layers[event.kind === 'match' ? 'score' : 'clock'];
-    if (layer.shown) {
-      const now = client.now();
-      const time = layer.content.querySelector('[data-time]');
-      const output = formatTime(clockValue(event, now), event.kind === 'track', event.clockMode === 'down');
-      if (time && time.textContent !== output) time.textContent = output;
-      const badge = layer.content.querySelector('[data-phase]');
-      const phase = PHASES[clockPhase(event, now)];
-      if (badge && badge.textContent !== phase) badge.textContent = phase;
-    }
-  }
-  requestAnimationFrame(updateTime);
-}
-requestAnimationFrame(updateTime);
 
 if (preview) {
   window.addEventListener('message', ({ source, origin, data }) => {
