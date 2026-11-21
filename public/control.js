@@ -143,6 +143,10 @@ function updateFocus() {
   const frame = $('#focus-frame');
   const stage = document.querySelector('.focus-stage');
   if (!frame || !stage || !state) return;
+  if (frame.dataset.focus !== layoutKey) {
+    frame.dataset.focus = layoutKey;
+    frame.src = pageUrl('overlay', { focus: layoutKey });
+  }
   const meta = MODULES[layoutKey];
   $('#focus-title').textContent = `${meta.title} · 局部放大`;
   const layout = editLayout();
@@ -285,6 +289,7 @@ function selectModule(key) {
     layoutModel = undefined;
   }
   setWorkspace('output');
+  renderLayers(activeEvent(state));
   renderLayout();
   tellPreview();
 }

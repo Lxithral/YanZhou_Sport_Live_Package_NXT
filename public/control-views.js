@@ -159,6 +159,7 @@ export function moduleList(state, event, selected) {
     const height = Math.min(100, MODULES[key].h * layout.scale / 1080);
     const map = `<span class="module-map" aria-hidden="true"><span class="module-map-rect" style="left:${(rect.x / 1920 * 100).toFixed(1)}%;top:${(rect.y / 1080 * 100).toFixed(1)}%;width:${width.toFixed(1)}%;height:${height.toFixed(1)}%"></span></span>`;
     return `<div class="module-card${key === selected ? ' active' : ''}${live ? ' live' : ''}">
+      ${button(live ? '隐藏' : '显示', { action: 'module-toggle', key, accessible: `${live ? '隐藏' : '显示'}${meta.title}`, small: true, pressed: live, variant: 'tally-button module-toggle' })}
       <button class="module-item" type="button" data-action="module-select" data-key="${key}" aria-pressed="${key === selected}">
         <span class="module-copy"><strong>${meta.title}</strong>
           <span class="module-state">${live ? '画面中' : '未显示'}</span>
@@ -166,7 +167,6 @@ export function moduleList(state, event, selected) {
         ${map}
       </button>
       <div class="module-foot">
-        ${button(live ? '隐藏' : '显示', { action: 'module-toggle', key, accessible: `${live ? '隐藏' : '显示'}${meta.title}`, small: true, pressed: live, variant: 'tally-button' })}
         ${live && total > 1 ? `<span class="page-steps">${button('上一页', { action: 'page', key, value: state.pages[key] - 1, glyph: 'left', iconOnly: true, disabled: state.pages[key] === 0 })}<span aria-live="polite">${state.pages[key] + 1} / ${total}</span>${button('下一页', { action: 'page', key, value: state.pages[key] + 1, glyph: 'right', iconOnly: true, disabled: state.pages[key] === total - 1 })}</span>` : ''}
       </div>
     </div>`;

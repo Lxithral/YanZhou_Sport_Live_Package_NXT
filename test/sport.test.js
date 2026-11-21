@@ -73,7 +73,7 @@ test('legacy basketball is removed without deleting other events or modifying st
   const { events, ...previous } = clientState(app.state, false);
   const oldEvents = events.slice(-2).map(({ division, ...event }) => ({ ...event, stage: eventStage({ ...event, division }) }));
   const next = verifyState(migrateState(verifyState({ ...previous, events: oldEvents, version: 1 })));
-  assert.equal(next.version, 7);
+  assert.equal(next.version, 8);
   assert.equal(activeEvent(next).id, football.id);
   assert.deepEqual(activeEvent(next).score, football.score);
   assert.ok(next.events.every(({ name }) => name !== '篮球'));
@@ -179,6 +179,23 @@ test('upgrading saved events drops timing data and the clock layer', () => {
   assert.deepEqual(next.standby.modules.brand, defaultLayout('brand'));
   assert.equal(next.standby.modules.clock, undefined);
   assert.strictEqual(migrateState(next), next);
+});
+
+test('upgrading old overlay layouts moves the intro, winner and athlete cards to their new positions', () => {
+  const old = initialState(true);
+  old.version = 7;
+  const race = activeEvent(old);
+  Object.assign(race.graphics.modules.lineup, { x: 530, y: 150, scale: 100 });
+  Object.assign(race.graphics.modules.results, { x: 560, y: 380, scale: 100 });
+  Object.assign(race.graphics.modules.athlete, { x: 112, y: 906, scale: 100 });
+  Object.assign(old.standby.modules.lineup, { x: 530, y: 150, scale: 100 });
+  const next = verifyState(migrateState(verifyState(old)));
+  const fixed = activeEvent(next);
+  assert.deepEqual(fixed.graphics.modules.lineup, defaultLayout('lineup'));
+  assert.deepEqual(fixed.graphics.modules.results, defaultLayout('results'));
+  assert.deepEqual(fixed.graphics.modules.athlete, defaultLayout('athlete'));
+  assert.deepEqual(next.standby.modules.lineup, defaultLayout('lineup'));
+  assert.equal(next.version, 8);
 });
 
 test('formatting uses centiseconds and stable positive countdown rounding', () => {

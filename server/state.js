@@ -9,7 +9,7 @@ import { AWARD_LIMIT, SCHOOL_RACES, canScore, className, classStandings, finalFo
 const LEGACY_PRESET_IDS = new Set(['run-1000', 'run-800', 'run-100', 'relay-100', 'long-jump', 'shot-put', 'run-1500']
   .flatMap((id) => [id, `${id}-women`]));
 const LEGACY_DEFAULT_ORIGINS = { brand: [48, 34], event: [48, 931], score: [1212, 34], athlete: [48, 813], notice: [752, 925] };
-const STATE_VERSION = 7;
+const STATE_VERSION = 8;
 const REHEARSAL_RACE = 'school-g1-men-run-1000-final';
 const REHEARSAL_LONG_JUMP = 'school-g1-men-long-jump-final';
 const REHEARSAL_TARGETS = new Map([['run-1000', REHEARSAL_RACE], ['long-jump', REHEARSAL_LONG_JUMP]]);
@@ -203,15 +203,29 @@ function stripTiming(event) {
   return { ...rest, graphics: stripClockModule(event.graphics) };
 }
 
+function migrateIntroLayouts(graphics) {
+  const modules = { ...graphics.modules };
+  const reset = (key, x, y, scale = 100) => {
+    const layout = modules[key];
+    if (!layout || layout.x !== x || layout.y !== y || layout.scale !== scale) return;
+    modules[key] = { ...defaultLayout(key), visible: layout.visible, opacity: layout.opacity, enter: layout.enter, exit: layout.exit, duration: layout.duration };
+  };
+  reset('lineup', 530, 150);
+  reset('results', 560, 380);
+  reset('athlete', 112, 906);
+  return { ...graphics, modules };
+}
+
 export function migrateState(state) {
   if (state.version === STATE_VERSION) return state;
   const { events, activeEventId, standby } = state.version < 5 ? migrateSchoolEvents(state) : state;
   const timingDropped = state.version < 7;
+  const layoutsDropped = state.version < 8;
+  const upgrade = (graphics) => migrateDefaultPositions(layoutsDropped ? migrateIntroLayouts(graphics) : graphics);
   return {
     version: STATE_VERSION, revision: state.revision + 1, activeEventId,
-    events: (timingDropped ? events.map(stripTiming) : events)
-      .map((event) => ({ ...event, graphics: migrateDefaultPositions(event.graphics) })),
-    standby: migrateDefaultPositions(timingDropped ? stripClockModule(standby) : standby),
+    events: (timingDropped ? events.map(stripTiming) : events).map((event) => ({ ...event, graphics: upgrade(event.graphics) })),
+    standby: upgrade(timingDropped ? stripClockModule(standby) : standby),
   };
 }
 

@@ -27,8 +27,8 @@ html, body, #stage { background: transparent !important; }
 .layer--brand { width: 609px; }
 .layer--event { width: 680px; }
 .layer--score { width: 660px; }
-.layer--lineup { width: 860px; }
-.layer--results { width: 800px; }
+.layer--lineup { width: 1680px; }
+.layer--results { width: 420px; }
 .layer--teams { width: 1048px; }
 .layer--athlete { width: 670px; }
 .layer--notice { width: 1120px; }
@@ -170,26 +170,27 @@ html, body, #stage { background: transparent !important; }
 .notice-ribbon span { align-self: center; margin: 10px 16px; font-size: 27px; line-height: 1.27; white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .rehearsal-mark { position: absolute; right: calc(var(--safe-x) + var(--safe-padding)); bottom: calc(var(--safe-y) + var(--safe-padding)); border: 2px solid #d7b795; border-radius: 4px; background: #3b221ee8; color: #f9e4c6; padding: 5px 21px; font-size: 28px; font-weight: 730; z-index: 5; }
 
-.lane-card, .champion-card { overflow: hidden; border-radius: 18px; box-shadow: 0 14px 34px #0c23401f; font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif; }
-.lane-card { background: #fff; color: #1b4f86; }
-.lane-card header, .champion-card header { display: grid; align-items: center; }
-.lane-card header { grid-template-columns: 86px minmax(0, 1fr) 72px; gap: 8px; min-height: 96px; padding: 12px 18px 10px 16px; }
-.lane-mark { display: grid; place-items: center; width: 78px; height: 68px; border-radius: 16px; background: #d8f4fc; color: #2aa4cb; }
-.runner-mark { width: 48px; height: 48px; fill: none; stroke: currentColor; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
-.lane-card h2 { margin: 0; overflow: hidden; color: #1a3f73; font-size: 40px; font-weight: 830; letter-spacing: .04em; text-overflow: ellipsis; white-space: nowrap; }
-.lane-card header .school-seal { width: 66px; height: 66px; justify-self: end; }
-.lane-columns, .lane-row { display: grid; grid-template-columns: 148px 156px 220px minmax(0, 1fr); align-items: center; padding: 0 28px; }
-.lane-columns { height: 52px; background: #d7f2fb; color: #6d97b0; font-size: 26px; font-weight: 720; }
-.lane-row { height: 64px; background: #fff; font-size: 32px; }
-.lane-row:nth-child(even) { background: #f4fbfe; }
-.lane-row b, .lane-row strong { overflow: hidden; color: #1c7598; font-weight: 760; text-overflow: ellipsis; white-space: nowrap; }
-.lane-row span { overflow: hidden; color: #8aa4b4; text-overflow: ellipsis; white-space: nowrap; }
-.lane-card footer, .lane-empty, .champion-empty { margin: 0; padding: 8px 20px 12px; color: #7f97a8; font-size: 22px; text-align: center; }
-.champion-card { background: #f4f7fb; color: #fff; }
-.champion-card header { grid-template-columns: 1fr; justify-items: start; gap: 2px; padding: 16px 28px 14px; background: linear-gradient(180deg, #1d4ea8, #163e8c); }
-.champion-card small { color: #d5e4ff; font-size: 18px; font-weight: 760; letter-spacing: .16em; }
-.champion-card strong { max-width: 100%; overflow: hidden; font-size: 42px; font-weight: 830; letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
-.champion-card em { color: #d7e6ff; font-size: 18px; font-style: normal; font-weight: 720; letter-spacing: .18em; }
-.champion-row { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 16px; min-height: 78px; padding: 12px 22px; background: #f7f9fc; color: #243044; }
-.champion-row b { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 8px; background: #f3d34a; color: #1d2740; font-size: 34px; font-weight: 830; }
-.champion-row span { overflow: hidden; font-size: 32px; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+.intro-board { position: relative; width: 1680px; height: 168px; font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif; }
+.intro-bar { position: absolute; left: 0; top: 14px; width: 1450px; height: 140px; display: grid; align-content: center; gap: 1px; padding: 0 44px 0 72px; overflow: hidden; border: 3px solid var(--wine); border-radius: 7px; background: linear-gradient(100deg, var(--paper-light), var(--paper)); color: var(--ink); box-shadow: 0 12px 28px #200b1942; }
+.intro-bar::before { content: ''; position: absolute; inset: 0 auto 0 30px; width: 18px; transform: skewX(-20deg); background: linear-gradient(90deg, var(--wine) 0 34%, var(--accent) 34% 64%, transparent 64%); }
+.intro-kicker { position: relative; z-index: 1; overflow: hidden; color: #8a4c4f; font-size: 20px; font-weight: 700; letter-spacing: .14em; text-overflow: ellipsis; white-space: nowrap; }
+.intro-main { position: relative; z-index: 1; display: flex; align-items: baseline; gap: 20px; min-width: 0; }
+.intro-name { font-size: 66px; line-height: 1.06; font-weight: 830; color: var(--wine); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.intro-bib { flex: none; color: #b33932; font-size: 44px; font-weight: 820; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.intro-stub { position: absolute; left: 1364px; top: 2px; width: 296px; height: 164px; transform: rotate(-6deg); transform-origin: left center; display: grid; place-items: center; align-content: center; gap: 1px; overflow: hidden; border-radius: 10px; background: linear-gradient(105deg, var(--wine), var(--wine-dark)); color: var(--paper-light); box-shadow: 0 14px 30px #200b1952; }
+.intro-stub::before { content: ''; position: absolute; inset: 8px; border: 1px dashed #f1d9bd4d; border-radius: 6px; pointer-events: none; }
+.intro-lane { display: flex; align-items: baseline; gap: 2px; font-weight: 830; line-height: 1; white-space: nowrap; }
+.intro-lane b { font-size: 64px; }
+.intro-lane small { color: #f1d9bd; font-size: 26px; font-weight: 700; }
+.intro-stub > small { max-width: 232px; overflow: hidden; color: #f0d9bf; font-size: 24px; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.intro-stub .school-seal { width: 38px; height: 38px; margin-top: 2px; opacity: .9; }
+
+.winner-card { position: relative; width: 420px; min-height: 260px; display: grid; align-content: start; gap: 8px; padding: 24px 26px 22px; overflow: hidden; border: 3px double var(--wine); border-radius: 10px; background: linear-gradient(160deg, var(--paper-light), var(--paper)); color: var(--ink); box-shadow: 0 14px 32px #200b1942; font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif; }
+.winner-card::after { content: ''; position: absolute; right: -42px; bottom: -48px; width: 200px; height: 200px; background: var(--seal) center / contain no-repeat; opacity: .12; mix-blend-mode: multiply; pointer-events: none; }
+.winner-tag { justify-self: start; padding: 3px 14px; background: var(--wine); color: var(--paper-light); font-size: 22px; font-weight: 760; letter-spacing: .14em; }
+.winner-name { position: relative; z-index: 2; overflow: hidden; font-size: 46px; line-height: 1.08; font-weight: 830; text-overflow: ellipsis; white-space: nowrap; }
+.winner-time { position: relative; z-index: 2; overflow: hidden; color: var(--wine); font-size: 62px; line-height: 1.12; font-weight: 800; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.winner-meta { position: relative; z-index: 2; overflow: hidden; color: #7b4b50; font-size: 22px; text-overflow: ellipsis; white-space: nowrap; }
+.winner-seal { position: absolute; z-index: 2; top: 18px; right: 18px; width: 46px; height: 46px; opacity: .85; }
+.winner-card--empty { place-content: center; justify-items: center; }
+.winner-empty { color: #7b4b50; font-size: 30px; }

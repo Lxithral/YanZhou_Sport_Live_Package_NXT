@@ -1,11 +1,12 @@
 import { SportsClient, demo, escapeHtml as h } from './client.js';
 import {
-  CANVAS, GRADES, LINEUP_SIZE, MODULES, SAFE_AREA, activeEvent, applicable, clamp, heats,
-  lineupRoster, moduleBounds, modulePosition, paginatedCount, standings,
+  CANVAS, GRADES, MODULES, SAFE_AREA, activeEvent, applicable, clamp, heats,
+  lineupRoster, moduleBounds, modulePosition, paginatedCount, resultText, standings,
 } from './sport.js';
 import { className } from './meet-program.js';
 
 const stage = document.querySelector('#stage');
+const focusKey = new URLSearchParams(location.search).get('focus');
 for (const [name, inset] of Object.entries(SAFE_AREA)) stage.style.setProperty(`--safe-${name}`, `${inset}px`);
 const preview = window.parent !== window && new URLSearchParams(location.search).get('preview') === '1';
 const layers = {};
@@ -27,7 +28,7 @@ for (const key of Object.keys(MODULES)) {
   layers[key] = { node, content, shown: false, html: '', animation: null };
 }
 
-if (demo) stage.insertAdjacentHTML('beforeend', '<div class="rehearsal-mark">彩排</div>');
+if (demo && !focusKey) stage.insertAdjacentHTML('beforeend', '<div class="rehearsal-mark">彩排</div>');
 
 function resize() {
   ratio = Math.min(innerWidth / CANVAS.width, innerHeight / CANVAS.height);
@@ -38,8 +39,6 @@ new ResizeObserver(resize).observe(document.documentElement);
 resize();
 
 const LANE_WORDS = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
-const runner = `<svg class="runner-mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="42" cy="14" r="5.5"/><path d="M16 31c7-3 12-1 16 4l5 5 9-3M30 35l-9 9m10-3 3 15m7-18 8 5-3 11"/></svg>`;
-
 function laneLabel(lane) {
   if (!lane) return '—';
   const word = LANE_WORDS[lane];
@@ -67,23 +66,28 @@ function teamLabel(event, athlete) {
 
 function lineupGraphic(event) {
   const page = state.pages.lineup;
-  const rows = lineupRoster(event);
-  const part = rows.slice(page * LINEUP_SIZE, (page + 1) * LINEUP_SIZE);
-  const pages = paginatedCount(event, 'lineup');
-  return `<div class="lane-card">
-    <header><span class="lane-mark">${runner}</span><h2>${h(broadcastTitle(event))}</h2>${seal}</header>
-    <div class="lane-columns"><span>道序</span><span>号码</span><span>班级</span><span>姓名</span></div>
-    ${part.map((athlete) => `<div class="lane-row"><b>${h(laneLabel(athlete.lane))}</b><span>${h(bibLabel(athlete.bib))}</span><span>${h(teamLabel(event, athlete))}</span><strong>${h(athlete.name)}</strong></div>`).join('') || '<p class="lane-empty">等待参赛名单</p>'}
-    ${pages > 1 ? `<footer>${page + 1} / ${pages}</footer>` : ''}
+  const athlete = lineupRoster(event)[page];
+  if (!athlete) return `<div class="intro-board"><div class="intro-bar"><span class="intro-kicker">起跑前 · ${h(broadcastTitle(event))}</span><strong class="intro-name">等待参赛名单</strong></div></div>`;
+  return `<div class="intro-board">
+    <div class="intro-bar">
+      <span class="intro-kicker">起跑前 · ${h(broadcastTitle(event))}</span>
+      <div class="intro-main"><strong class="intro-name">${h(athlete.name)}</strong><span class="intro-bib">— ${h(bibLabel(athlete.bib))}</span></div>
+    </div>
+    <div class="intro-stub"><span class="intro-lane"><b>${h(athlete.lane ?? '—')}</b><small>道</small></span><small>${h(teamLabel(event, athlete))}</small><img class="school-seal" src="/assets/yanzhou-seal.png" alt=""></div>
   </div>`;
 }
 
 function championGraphic(event) {
   const winner = standings(event).find((row) => row.rank === 1);
-  const detail = winner ? [winner.athlete.lane ? laneLabel(winner.athlete.lane) : '', teamLabel(event, winner.athlete), winner.athlete.name].filter(Boolean).join('  ') : '';
-  return `<div class="champion-card">
-    <header><small>ATHLETICS</small><strong>${h(broadcastTitle(event))}</strong><em>CHAMPION</em></header>
-    ${winner ? `<div class="champion-row"><b>1</b><span>${h(detail)}</span></div>` : '<p class="champion-empty">等待冠军</p>'}
+  if (!winner) return `<div class="winner-card winner-card--empty"><span class="winner-tag">第 1 名</span><p class="winner-empty">等待冠军</p></div>`;
+  const { athlete } = winner;
+  const meta = [athlete.lane ? laneLabel(athlete.lane) : '', teamLabel(event, athlete)].filter(Boolean).join(' · ');
+  return `<div class="winner-card">
+    <img class="school-seal winner-seal" src="/assets/yanzhou-seal.png" alt="">
+    <span class="winner-tag">第 1 名</span>
+    <strong class="winner-name">${h(athlete.name)}</strong>
+    <span class="winner-time">${h(resultText(athlete, event))}</span>
+    <small class="winner-meta">${h(meta)}</small>
   </div>`;
 }
 
@@ -193,7 +197,7 @@ function render(snapshot) {
   for (const [key, layer] of Object.entries(layers)) {
     const layout = state.modules[key];
     if (!layout) continue;
-    const visible = layout.visible && applicable(key, event);
+    const visible = (focusKey ? key === focusKey : layout.visible) && applicable(key, event);
     if (drag?.key !== key) placeAtLayout(key, layer.node);
     layer.node.style.transform = `scale(${layout.scale / 100})`;
     layer.node.style.opacity = layout.opacity / 100;

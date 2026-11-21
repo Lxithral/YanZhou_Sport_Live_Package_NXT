@@ -1,7 +1,7 @@
 export const CANVAS = { width: 1920, height: 1080 };
 export const SAFE_AREA = { x: 96, y: 54, padding: 16 };
 export const PAGE_SIZE = 6;
-export const LINEUP_SIZE = 7;
+export const LINEUP_SIZE = 1;
 const MAX_DURATION = 24 * 60 * 60 * 1000;
 export const MAX_COMPETITORS = 128;
 
@@ -9,8 +9,8 @@ export const MODULES = {
   brand:   { title: 'Logo 挂角', icon: 'image', corner: 'tl', w: 609, h: 118, visible: true },
   event:   { title: '赛事条', icon: 'list', corner: 'bl', w: 680, h: 112, visible: true },
   score:   { title: '球赛记分牌', icon: 'score', corner: 'tr', w: 660, h: 144, visible: true, kind: 'match' },
-  lineup:  { title: '参赛名单', icon: 'people', x: 530, y: 150, w: 860, h: 680, visible: false },
-  results: { title: '冠军', icon: 'chart', x: 560, y: 380, w: 800, h: 250, visible: false },
+  lineup:  { title: '起跑介绍', icon: 'people', x: 120, y: 690, w: 1680, h: 168, visible: false },
+  results: { title: '冠军', icon: 'chart', x: 1380, y: 380, w: 420, h: 260, visible: false },
   teams:   { title: '班级积分', icon: 'chart', x: 436, y: 220, w: 1048, h: 636, visible: false },
   athlete: { title: '人物条', icon: 'person', corner: 'bl', w: 670, h: 104, visible: false },
   notice:  { title: '公告', icon: 'notice', corner: 'br', w: 1120, h: 122, scale: 90, visible: false },

@@ -18,8 +18,8 @@ if not exist "%~dp0node_modules\ws\package.json" (
   pause
   exit /b 1
 )
-set "SPORT_OPEN=--open"
-if /i "%~1"=="--headless" set "SPORT_OPEN="
+set "SPORT_OPEN="
+if /i "%~1"=="--open" set "SPORT_OPEN=--open"
 "%SPORT_NODE%" "%~dp0server\server.js" %SPORT_OPEN%
 set "SPORT_EXIT=%ERRORLEVEL%"
 if not "%SPORT_EXIT%"=="0" if /i not "%~1"=="--headless" pause
