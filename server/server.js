@@ -77,7 +77,7 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), now = () => Math.
       }
       const name = url.pathname === '/' ? 'control.html' : decodeURIComponent(url.pathname.slice(1));
       const type = MIME[path.extname(name)];
-      if (!type || !/^(?:assets\/)?[a-z0-9][a-z0-9.-]*$/i.test(name)) {
+      if (!type || !/^(?:assets\/(?:branding\/)?)?[a-z0-9][a-z0-9.-]*$/i.test(name)) {
         return reply(req, res, 404, plain, '页面不存在。');
       }
       const content = await readFile(path.join(PUBLIC, name));

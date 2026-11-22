@@ -51,6 +51,12 @@ test('control and output stay in sync and a restart restores the race', async (t
   assert.equal((await fetch(`${base}/health`)).status, 200);
   assert.match(await (await fetch(`${base}/control.html`)).text(), /<title>烟洲体育导播台<\/title>/);
   assert.equal((await fetch(`${base}/overlay.html`, { method: 'HEAD' })).status, 200);
+  const brandingPreview = await fetch(`${base}/branding-preview.html`);
+  assert.equal(brandingPreview.status, 200);
+  assert.match(await brandingPreview.text(), /data-branding-preview/);
+  const goldMark = await fetch(`${base}/assets/branding/yanzhou-zhou-gold-mark.png`, { method: 'HEAD' });
+  assert.equal(goldMark.status, 200);
+  assert.equal(goldMark.headers.get('content-type'), 'image/png');
   assert.equal((await fetch(`${base}/data/settings.json`)).status, 404);
   const operator = connect(base);
   const output = connect(base, 'view');

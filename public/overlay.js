@@ -1,16 +1,22 @@
 import { SportsClient, escapeHtml as h } from './client.js';
 import {
-  CANVAS, GRADES, MODULES, SAFE_AREA, activeEvent, applicable, clamp, heats,
+  CANVAS, GRADES, MODULES, SAFE_AREA, activeEvent, applicable, clamp, defaultLayout, heats,
   lineupRoster, moduleBounds, modulePosition, paginatedCount, resultText, standings,
 } from './sport.js';
 import { className } from './meet-program.js';
+import {
+  brandGraphic, brandingMode, mountBrandCorners, showBrandCorner, showBrandLayer,
+} from './branding.js';
 
 const stage = document.querySelector('#stage');
-const focusKey = new URLSearchParams(location.search).get('focus');
+const query = new URLSearchParams(location.search);
+const focusKey = query.get('focus');
+const mode = brandingMode(query);
+const staticPreview = stage.hasAttribute('data-branding-preview');
 for (const [name, inset] of Object.entries(SAFE_AREA)) stage.style.setProperty(`--safe-${name}`, `${inset}px`);
-const preview = window.parent !== window && new URLSearchParams(location.search).get('preview') === '1';
+const preview = window.parent !== window && query.get('preview') === '1';
 const layers = {};
-const seal = '<img class="school-seal" src="/assets/yanzhou-seal.png" alt="">';
+const brandCorners = mode === 'modern' && !focusKey ? mountBrandCorners(stage) : [];
 let state;
 let editKey = '';
 let drag;
@@ -101,7 +107,7 @@ function tableGraphic(key, event) {
   const part = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const title = ranked ? '成绩榜' : (event.kind === 'track' && heats(event).length > 1 ? `第 ${event.heat ?? 1} 组名单` : '参赛名单');
   return `<div class="table-board">
-    <header>${seal}<span>${h(eventTitle(event))}</span><strong>${title}</strong></header>
+    <header><img class="school-seal" src="/assets/yanzhou-seal.png" alt=""><span>${h(eventTitle(event))}</span><strong>${title}</strong></header>
     <div class="board-row board-labels"><span>${ranked ? '名次' : (event.kind === 'field' ? '序号' : '道次')}</span><span>号码</span><span>姓名 / 队名</span><span>单位</span>${ranked ? '<span>成绩</span>' : '<span></span>'}</div>
     ${part.map(({ athlete, rank }) => `<div class="board-row"><strong>${(ranked ? rank : athlete.lane) ?? '—'}</strong><span>${h(athlete.bib || '—')}</span><b>${h(athlete.name)}</b><span>${h(athlete.team || '—')}</span><strong>${ranked ? h(resultText(athlete, event)) : ''}</strong></div>`).join('')}
     ${part.length ? '' : `<div class="board-empty">${ranked ? '等待成绩' : '等待参赛名单'}</div>`}
@@ -111,7 +117,7 @@ function tableGraphic(key, event) {
 
 function classGraphic(event) {
   const rows = state.classBoard ?? [];
-  return `<div class="table-board class-board"><header>${seal}<span>${FESTIVAL_NAME}</span><strong>${GRADES[event.schedule.grade]}班级积分</strong></header>
+  return `<div class="table-board class-board"><header><img class="school-seal" src="/assets/yanzhou-seal.png" alt=""><span>${FESTIVAL_NAME}</span><strong>${GRADES[event.schedule.grade]}班级积分</strong></header>
     <div class="board-row board-labels"><span>名次</span><span>班级</span><span>破纪录</span><span>总分</span></div>
     ${rows.map(({ rank, team, records, total, tied }) => `<div class="board-row"><strong>${rank}</strong><b>${h(team)}${tied ? ' · 待抽签' : ''}</b><span>${records}</span><strong>${total}</strong></div>`).join('') || '<div class="board-empty">等待决赛计分</div>'}
     <footer><span>${h(state.meet.title)}</span><span>团体前八</span></footer></div>`;
@@ -120,9 +126,7 @@ function classGraphic(event) {
 
 function sportsGraphic(key, event) {
   switch (key) {
-    case 'brand': return `<div class="brand-ribbon">${seal}<div class="brand-copy">
-      <img class="brand-wordmark" src="/assets/yanzhou-sport-wordmark.png" alt="YZBTVS SPORT" width="513" height="92">
-      ${state.meet.subtitle ? `<small>${h(state.meet.subtitle)}</small>` : ''}</div></div>`;
+    case 'brand': return brandGraphic(mode, state.meet.subtitle);
     case 'event': {
       const group = event.kind === 'track' && heats(event).length > 1 ? `第 ${event.heat ?? 1} 组` : '';
       const grade = event.schedule?.grade;
@@ -159,6 +163,7 @@ function visibility(layer, visible, layout, immediate) {
   layer.animation.onfinish = () => {
     layer.node.hidden = !layer.shown;
     layer.animation?.cancel();
+    updateBrandCorners();
   };
 }
 
@@ -178,6 +183,25 @@ function layerSelection() {
   Object.entries(layers).forEach(([key, { node }]) => { node.classList.toggle('is-editable', preview && key === editKey); });
 }
 
+function updateBrandCorners() {
+  if (!brandCorners.length) return;
+  const brandVisible = !layers.brand.node.hidden && state.modules.brand?.opacity > 0;
+  const occupied = [];
+  for (const [key, layer] of Object.entries(layers)) {
+    const layout = state.modules[key];
+    if (layer.node.hidden || !layer.html || !layout?.opacity) continue;
+    occupied.push({
+      x: Number.parseFloat(layer.node.style.left),
+      y: Number.parseFloat(layer.node.style.top),
+      width: MODULES[key].w * layout.scale / 100,
+      height: MODULES[key].h * layout.scale / 100,
+    });
+  }
+  for (const { node, box } of brandCorners) {
+    node.hidden = !showBrandCorner(mode, brandVisible, focusKey, box, occupied);
+  }
+}
+
 function render(snapshot) {
   const cut = !state || state.activeEventId !== snapshot.activeEventId;
   if (cut && drag) {
@@ -192,7 +216,8 @@ function render(snapshot) {
   for (const [key, layer] of Object.entries(layers)) {
     const layout = state.modules[key];
     if (!layout) continue;
-    const visible = (focusKey ? key === focusKey : layout.visible) && applicable(key, event);
+    const selected = focusKey ? key === focusKey : layout.visible;
+    const visible = (key === 'brand' ? showBrandLayer(mode, selected) : selected) && applicable(key, event);
     if (drag?.key !== key) placeAtLayout(key, layer.node);
     layer.node.style.transform = `scale(${layout.scale / 100})`;
     layer.node.style.opacity = layout.opacity / 100;
@@ -205,11 +230,20 @@ function render(snapshot) {
     }
     visibility(layer, visible, layout, cut);
   }
+  updateBrandCorners();
 }
 
-const client = new SportsClient({ role: 'view', onState: render });
+if (staticPreview) {
+  render({
+    events: [],
+    meet: { accent: '#f5c84b', subtitle: '' },
+    modules: { brand: defaultLayout('brand') },
+  });
+} else {
+  new SportsClient({ role: 'view', onState: render });
+}
 
-if (preview) {
+if (preview && !staticPreview) {
   window.addEventListener('message', ({ source, origin, data }) => {
     if (origin !== location.origin || source !== window.parent || data?.type !== 'preview:settings') return;
     stage.classList.toggle('guides', data.guides === true);
@@ -217,6 +251,7 @@ if (preview) {
     layerSelection();
     if (data.resetPosition && state) {
       for (const [key, layer] of Object.entries(layers)) placeAtLayout(key, layer.node);
+      updateBrandCorners();
     }
   });
   stage.addEventListener('pointerdown', (pointer) => {
@@ -235,6 +270,7 @@ if (preview) {
     drag.x = clamp(Math.round(drag.initialX + (pointer.clientX - drag.startX) / ratio), 0, drag.bounds.x);
     drag.y = clamp(Math.round(drag.initialY + (pointer.clientY - drag.startY) / ratio), 0, drag.bounds.y);
     place(layers[drag.key].node, drag.x, drag.y);
+    updateBrandCorners();
   });
   function endDrag(pointer) {
     if (drag?.pointerId !== pointer.pointerId) return;
@@ -242,6 +278,7 @@ if (preview) {
     drag = undefined;
     if (pointer.type === 'pointercancel') place(layers[key].node, initialX, initialY);
     else if (x !== initialX || y !== initialY) window.parent.postMessage({ type: 'preview:move', key, x, y, eventId }, location.origin);
+    updateBrandCorners();
   }
   stage.addEventListener('pointerup', endDrag);
   stage.addEventListener('pointercancel', endDrag);
