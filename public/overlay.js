@@ -1,4 +1,4 @@
-import { SportsClient, demo, escapeHtml as h } from './client.js';
+import { SportsClient, escapeHtml as h } from './client.js';
 import {
   CANVAS, GRADES, MODULES, SAFE_AREA, activeEvent, applicable, clamp, heats,
   lineupRoster, moduleBounds, modulePosition, paginatedCount, resultText, standings,
@@ -27,8 +27,6 @@ for (const key of Object.keys(MODULES)) {
   stage.append(node);
   layers[key] = { node, content, shown: false, html: '', animation: null };
 }
-
-if (demo && !focusKey) stage.insertAdjacentHTML('beforeend', '<div class="rehearsal-mark">彩排</div>');
 
 function resize() {
   ratio = Math.min(innerWidth / CANVAS.width, innerHeight / CANVAS.height);
@@ -67,27 +65,26 @@ function teamLabel(event, athlete) {
 function lineupGraphic(event) {
   const page = state.pages.lineup;
   const athlete = lineupRoster(event)[page];
-  if (!athlete) return `<div class="intro-board"><div class="intro-bar"><span class="intro-kicker">起跑前 · ${h(broadcastTitle(event))}</span><strong class="intro-name">等待参赛名单</strong></div></div>`;
+  const name = athlete?.name || '等待参赛名单';
+  const nameSize = Math.min(76, Math.max(28, Math.floor(300 / [...name].length)));
   return `<div class="intro-board">
     <div class="intro-bar">
-      <span class="intro-kicker">起跑前 · ${h(broadcastTitle(event))}</span>
-      <div class="intro-main"><strong class="intro-name">${h(athlete.name)}</strong><span class="intro-bib">— ${h(bibLabel(athlete.bib))}</span></div>
+      <span class="intro-kicker">${h(broadcastTitle(event))}</span>
+      <div class="intro-main"><strong class="intro-bib">— ${h(bibLabel(athlete?.bib))}</strong><span class="intro-detail">${h(athlete ? [athlete.lane ? laneLabel(athlete.lane) : '', teamLabel(event, athlete)].filter(Boolean).join(' · ') : '等待参赛名单')}</span></div>
     </div>
-    <div class="intro-stub"><span class="intro-lane"><b>${h(athlete.lane ?? '—')}</b><small>道</small></span><small>${h(teamLabel(event, athlete))}</small><img class="school-seal" src="/assets/yanzhou-seal.png" alt=""></div>
+    <div class="intro-stub"><strong class="intro-name" style="--name-size: ${nameSize}px">${h(name)}</strong></div>
   </div>`;
 }
 
 function championGraphic(event) {
   const winner = standings(event).find((row) => row.rank === 1);
-  if (!winner) return `<div class="winner-card winner-card--empty"><span class="winner-tag">第 1 名</span><p class="winner-empty">等待冠军</p></div>`;
-  const { athlete } = winner;
-  const meta = [athlete.lane ? laneLabel(athlete.lane) : '', teamLabel(event, athlete)].filter(Boolean).join(' · ');
-  return `<div class="winner-card">
-    <img class="school-seal winner-seal" src="/assets/yanzhou-seal.png" alt="">
-    <span class="winner-tag">第 1 名</span>
-    <strong class="winner-name">${h(athlete.name)}</strong>
-    <span class="winner-time">${h(resultText(athlete, event))}</span>
-    <small class="winner-meta">${h(meta)}</small>
+  const name = winner?.athlete.name || '等待冠军';
+  const time = winner ? resultText(winner.athlete, event) : '—';
+  const nameSize = Math.min(64, Math.max(24, Math.floor(272 / [...name].length)));
+  const timeSize = Math.min(60, Math.max(24, Math.floor(272 / (time.length * .62))));
+  return `<div class="winner-card" aria-label="第一名">
+    <strong class="winner-name" style="--name-size: ${nameSize}px">${h(name)}</strong>
+    <span class="winner-time" style="--time-size: ${timeSize}px">${h(time)}</span>
   </div>`;
 }
 
@@ -129,16 +126,15 @@ function sportsGraphic(key, event) {
     case 'event': {
       const group = event.kind === 'track' && heats(event).length > 1 ? `第 ${event.heat ?? 1} 组` : '';
       const grade = event.schedule?.grade;
-      const context = [grade === 'staff' ? '' : GRADES[grade], event.stage, group, event.venue].filter(Boolean).join(' · ');
-      return `<div class="event-ribbon"><div class="ticket-body"><strong>${h(event.name)}</strong>${context ? `<small>${h(context)}</small>` : ''}</div>
-        <div class="ticket-stub">${seal}<span>${String(state.eventNumber).padStart(2, '0')}</span></div></div>`;
+      const context = [grade === 'staff' ? '' : GRADES[grade], event.stage, group].filter(Boolean).join(' · ');
+      return `<div class="event-banner"><span class="eb-rule" aria-hidden="true"></span>
+        <div class="eb-copy"><strong>${h(event.name)}</strong><small>${h([context, event.venue].filter(Boolean).join(' · '))}</small></div>
+        <div class="eb-count"><b>${String(state.eventNumber ?? 0).padStart(2, '0')}</b><span>场</span></div></div>`;
     }
     // case 'score': 球赛记分牌先不用。
     // case 'teams': 班级积分榜先不用。
     case 'lineup': return lineupGraphic(event);
     case 'results': return championGraphic(event);
-    case 'athlete': return `<div class="athlete-ribbon">${state.athlete.tag ? `<small>${h(state.athlete.tag)}</small>` : ''}<div><strong>${h(state.athlete.name)}</strong><span>${h(state.athlete.detail)}</span></div></div>`;
-    case 'notice': return `<div class="notice-ribbon"><b>${h(state.notice.title)}</b><span>${h(state.notice.body)}</span></div>`;
     default: return '';
   }
 }

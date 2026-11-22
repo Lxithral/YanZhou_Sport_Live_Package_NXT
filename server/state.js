@@ -8,18 +8,15 @@ import { AWARD_LIMIT, SCHOOL_RACES, canScore, className, classStandings, finalFo
 
 const LEGACY_PRESET_IDS = new Set(['run-1000', 'run-800', 'run-100', 'relay-100', 'long-jump', 'shot-put', 'run-1500']
   .flatMap((id) => [id, `${id}-women`]));
-const LEGACY_DEFAULT_ORIGINS = { brand: [48, 34], event: [48, 931], score: [1212, 34], athlete: [48, 813], notice: [752, 925] };
-const STATE_VERSION = 8;
-const REHEARSAL_RACE = 'school-g1-men-run-1000-final';
-const REHEARSAL_LONG_JUMP = 'school-g1-men-long-jump-final';
-const REHEARSAL_TARGETS = new Map([['run-1000', REHEARSAL_RACE], ['long-jump', REHEARSAL_LONG_JUMP]]);
+const LEGACY_DEFAULT_ORIGINS = { brand: [48, 34], event: [48, 931], score: [1212, 34] };
+const STATE_VERSION = 9;
 const BOARD_KEYS = ['lineup', 'results'];
 const TABLE_KEYS = [...BOARD_KEYS, 'teams'];
 const SPECIAL = ['DNS', 'DNF', 'DQ', 'NM'];
 const MAX_EVENTS = 160;
 const MAX_ATTEMPTS = 12;
 const MAX_HEATS = 32;
-const RESULT_COMMANDS = new Set(['athlete:save', 'athlete:delete', 'athlete:attempt', 'athlete:import', 'rank:move', 'rank:remove', 'rank:reset', 'jump:mark', 'jump:undo']);
+const RESULT_COMMANDS = new Set(['athlete:save', 'athlete:delete', 'athlete:attempt', 'rank:move', 'rank:remove', 'rank:reset', 'jump:mark', 'jump:undo']);
 
 function requireThat(condition, message) {
   if (!condition) throw new Error(message);
@@ -52,7 +49,6 @@ function defaultGraphics() {
     meet: { title: '烟洲体育', subtitle: '', accent: '#f5c84b' },
     modules: Object.fromEntries(Object.keys(MODULES).map((key) => [key, defaultLayout(key)])),
     pages: { lineup: 0, results: 0 },
-    athlete: { name: '', detail: '', tag: '' }, notice: { title: '赛事公告', body: '' },
   };
 }
 
@@ -64,22 +60,14 @@ function schoolEvents() {
   return SCHOOL_RACES.map(({ id, ...fields }) => newEvent(structuredClone(fields), id));
 }
 
-export function initialState(demo = false) {
+export function initialState() {
   const events = schoolEvents();
-  if (demo) {
-    events.find(({ id }) => id === REHEARSAL_RACE).competitors = ['林浩宇', '陈子航', '陆晨曦', '吴思远', '苏乐扬', '张铭轩', '周予安', '韩东辰']
-      .map((name, i) => ({ id: `demo-${i + 1}`, name, lane: i + 1, bib: String(101 + i), team: `${i + 1}班`, time: null, attempts: [], status: 'pending', heat: 1 }));
-    // 跳远彩排名单先不用，长距离示例只留 1000 米。
-    // events.find(({ id }) => id === REHEARSAL_LONG_JUMP).competitors = [
-    //   { id: 'demo-jumper', name: '示例选手', lane: 1, bib: '501', team: '1班', time: null, attempts: [519, 'X', 536], status: 'ok' },
-    // ];
-  }
-  return { version: STATE_VERSION, revision: 0, activeEventId: demo ? REHEARSAL_RACE : events[0].id, events, standby: defaultGraphics() };
+  return { version: STATE_VERSION, revision: 0, activeEventId: events[0].id, events, standby: defaultGraphics() };
 }
 
 function validGraphics(config, version) {
   return typeof config?.meet?.title === 'string' && typeof config.meet.subtitle === 'string' && /^#[0-9a-f]{6}$/i.test(config.meet.accent) &&
-    typeof config.athlete?.name === 'string' && typeof config.notice?.body === 'string' && object(config.pages) &&
+    object(config.pages) &&
     Object.keys(MODULES).every((key) => {
       if (key === 'teams' && version < 4) return true;
       const layout = config.modules?.[key];
@@ -134,10 +122,12 @@ export function verifyState(value) {
 }
 
 function migrateLegacyGraphics(state) {
-  const { meet, modules, athlete, notice, pages } = state;
-  const current = { meet, modules, athlete, notice, pages };
-  const template = { ...defaultGraphics(), meet: structuredClone(meet), modules: structuredClone(modules) };
-  for (const key of ['lineup', 'results', 'athlete', 'notice']) template.modules[key].visible = false;
+  const { meet, pages } = state;
+  // 旧版本把人物条、公告等模块的布局放在顶层，这里只保留仍然存在的模块。
+  const known = (source) => Object.fromEntries(Object.keys(MODULES).map((key) => [key, structuredClone(source?.[key] ?? defaultLayout(key))]));
+  const current = { meet, modules: known(state.modules), pages };
+  const template = { ...defaultGraphics(), meet: structuredClone(meet), modules: known(state.modules) };
+  for (const key of ['lineup', 'results']) template.modules[key].visible = false;
   const events = state.events
     .filter((event) => state.version === 2 || (event.id !== 'basketball' && !(event.kind === 'match' && event.name.trim() === '篮球')))
     .map((event) => {
@@ -166,17 +156,7 @@ function migrateSchoolEvents(state) {
     updated.push(...schoolEvents().filter(({ id }) => !ids.has(id)));
     outputSettings = addPointsLayer(standby);
   }
-  let selectionId = activeEventId;
-  for (const [oldId, schoolId] of REHEARSAL_TARGETS) {
-    const sample = updated.find((event) => event.id === oldId && !event.schedule);
-    const target = updated.find((event) => event.id === schoolId);
-    if (!sample?.competitors.length || !sample.competitors.every(({ id }) => id.startsWith('demo-')) || !target || hasRaceData(target)) continue;
-    if (['kind', 'division', 'distance', 'trackLength', 'legs'].some((key) => sample[key] !== target[key])) continue;
-    const { competitors, rankOrder } = sample;
-    updated = updated.filter(({ id }) => id !== oldId).map((event) => event.id === schoolId ?
-      { ...event, competitors, ...(rankOrder ? { rankOrder } : {}) } : event);
-    if (selectionId === oldId) selectionId = schoolId;
-  }
+  const selectionId = activeEventId;
   const selection = updated.find(({ id }) => id === selectionId) ?? updated.find((event) => event.schedule) ?? updated[0];
   const selected = selection?.id ?? null;
   return { events: updated, activeEventId: selected, standby: outputSettings };
@@ -186,6 +166,7 @@ function migrateDefaultPositions(graphics) {
   const modules = { ...graphics.modules };
   for (const [key, [oldX, oldY]] of Object.entries(LEGACY_DEFAULT_ORIGINS)) {
     const layout = modules[key];
+    if (!layout) continue;
     if (layout.x !== oldX || layout.y !== oldY || layout.scale !== 100) continue;
     const { x, y, scale } = defaultLayout(key);
     modules[key] = { ...layout, x, y, scale };
@@ -203,25 +184,36 @@ function stripTiming(event) {
   return { ...rest, graphics: stripClockModule(event.graphics) };
 }
 
-function migrateIntroLayouts(graphics) {
+function migrateIntroLayouts(graphics, version) {
   const modules = { ...graphics.modules };
   const reset = (key, x, y, scale = 100) => {
     const layout = modules[key];
     if (!layout || layout.x !== x || layout.y !== y || layout.scale !== scale) return;
     modules[key] = { ...defaultLayout(key), visible: layout.visible, opacity: layout.opacity, enter: layout.enter, exit: layout.exit, duration: layout.duration };
   };
-  reset('lineup', 530, 150);
-  reset('results', 560, 380);
-  reset('athlete', 112, 906);
+  if (version < 8) {
+    reset('lineup', 530, 150);
+    reset('results', 560, 380);
+  }
+  reset('lineup', 120, 690);
+  reset('results', 1380, 380);
   return { ...graphics, modules };
+}
+
+function pruneModules(graphics) {
+  // 只保留当前仍在使用的模块，旧版本留下的人物条、公告等布局在这里清掉。
+  const modules = Object.fromEntries(Object.keys(MODULES).map((key) => [key, graphics.modules?.[key] ?? defaultLayout(key)]));
+  return { meet: graphics.meet, modules, pages: graphics.pages };
 }
 
 export function migrateState(state) {
   if (state.version === STATE_VERSION) return state;
   const { events, activeEventId, standby } = state.version < 5 ? migrateSchoolEvents(state) : state;
   const timingDropped = state.version < 7;
-  const layoutsDropped = state.version < 8;
-  const upgrade = (graphics) => migrateDefaultPositions(layoutsDropped ? migrateIntroLayouts(graphics) : graphics);
+  const upgrade = (graphics) => {
+    const positioned = migrateIntroLayouts(graphics, state.version);
+    return pruneModules(state.version < 8 ? migrateDefaultPositions(positioned) : positioned);
+  };
   return {
     version: STATE_VERSION, revision: state.revision + 1, activeEventId,
     events: (timingDropped ? events.map(stripTiming) : events).map((event) => ({ ...event, graphics: upgrade(event.graphics) })),
@@ -383,18 +375,18 @@ function getRosterEvent(state, eventId) {
 
 function saveModule(state, { key, patch, eventId }) {
   requireThat(Object.hasOwn(MODULES, key) && object(patch), '包装模块不存在。');
-  const { modules, pages, athlete, notice } = graphicsForActive(state, eventId);
+  const { modules, pages } = graphicsForActive(state, eventId);
   const layout = modules[key];
   if (Object.hasOwn(patch, 'visible')) {
     requireThat(typeof patch.visible === 'boolean', '请指定显隐状态。');
     const event = activeEvent(state);
     if (patch.visible) {
       requireThat(applicable(key, event), '当前赛事不适用这个模块。');
-      if (key === 'athlete') requireThat(athlete.name, '请先填写人物信息。');
-      if (key === 'notice') requireThat(notice.body, '请先填写公告。');
+      if (key === 'lineup') modules.event.visible = false;
+      if (key === 'event') modules.lineup.visible = false;
       if (TABLE_KEYS.includes(key)) {
         for (const other of TABLE_KEYS) if (other !== key) modules[other].visible = false;
-        if (BOARD_KEYS.includes(key)) pages[key] = 0;
+        if (key === 'results') pages.results = 0;
       }
     }
     layout.visible = patch.visible;
@@ -517,18 +509,6 @@ const commands = {
     athlete.status = jumpStatus(athlete);
     pruneRanks(event);
   },
-  'athlete:import'(state, { eventId, rows, replace }) {
-    const event = getRosterEvent(state, eventId);
-    requireThat(Array.isArray(rows) && rows.length > 0 && rows.length <= MAX_COMPETITORS, `请导入 1 至 ${MAX_COMPETITORS} 位选手。`);
-    const imported = rows.map((row, i) => {
-      try { return readAthlete(row, event); }
-      catch (error) { throw new Error(`CSV 第 ${Number.isInteger(row?.line) ? row.line : i + 2} 行：${error.message}`); }
-    });
-    const roster = replace === true ? imported : [...event.competitors, ...imported];
-    ensureRoster(roster);
-    event.competitors = roster;
-    if (replace === true) delete event.rankOrder;
-  },
   'rank:move': moveRank,
   'rank:remove'(state, { eventId, id }) {
     const event = getRosterEvent(state, eventId);
@@ -572,12 +552,11 @@ const commands = {
     requireThat(typeof accent === 'string' && /^#[0-9a-f]{6}$/i.test(accent), '请选择有效的包装强调色。');
     graphicsForActive(state, eventId).meet = { title: text(title, 20, '榜单页脚', true), subtitle: text(subtitle, 24, '挂角副标题'), accent };
   },
-  'text:save'(state, { key, fields, visible, eventId }) {
-    requireThat(object(fields) && ['athlete', 'notice'].includes(key), '文字内容无效。');
+  'modules:brand-only'(state, { eventId }) {
     const graphics = graphicsForActive(state, eventId);
-    if (key === 'athlete') graphics.athlete = { name: text(fields.name, 30, '姓名或队名', true), detail: text(fields.detail, 42, '人物说明'), tag: text(fields.tag, 12, '人物标签') };
-    else graphics.notice = { title: text(fields.title, 16, '公告标题', true), body: text(fields.body, 100, '公告内容', true) };
-    if (visible === true) graphics.modules[key].visible = true;
+    for (const [key, layout] of Object.entries(graphics.modules)) layout.visible = key === 'brand';
+    graphics.pages.lineup = 0;
+    graphics.pages.results = 0;
   },
 };
 

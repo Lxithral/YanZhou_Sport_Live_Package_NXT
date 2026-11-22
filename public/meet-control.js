@@ -36,9 +36,6 @@ export function createMeetDesk({ getState, updateRegion }) {
     const listed = ordered.filter((event) => (!grade || event.schedule.grade === grade) &&
       (!session || scheduleSession(event.schedule) === session) && needles.every((needle) =>
         `${eventTitle(event)} ${GRADES[event.schedule.grade]}${DIVISIONS[event.division]}${event.name}${event.stage}`.replace(/[\s·]/g, '').toLocaleLowerCase().includes(needle)));
-    const next = ordered[ordered.findIndex(({ id }) => id === state.activeEventId) + 1];
-    updateRegion('#schedule-next', next ? button('下一场', { action: 'schedule-live', key: next.id, glyph: 'right', small: true, accessible: '下一场 · ' + eventTitle(next) }) : '');
-
     const limit = pageLimit();
     const pages = Math.max(1, Math.ceil(listed.length / limit));
     schedulePage = clamp(schedulePage, 0, pages - 1);

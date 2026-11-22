@@ -1,8 +1,5 @@
-export const demo = new URLSearchParams(location.search).get('mode') === 'demo';
-
-export function pageUrl(page, params = {}, rehearsal = demo) {
+export function pageUrl(page, params = {}) {
   const url = new URL(`/${page}.html`, location.origin);
-  if (rehearsal) url.searchParams.set('mode', 'demo');
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return url.href;
 }
@@ -37,7 +34,6 @@ export class SportsClient {
     const url = new URL('/ws', location.href);
     url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('role', this.role);
-    url.searchParams.set('mode', demo ? 'demo' : 'live');
     const socket = new WebSocket(url.href);
     this.#socket = socket;
     socket.addEventListener('open', () => {

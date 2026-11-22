@@ -8,8 +8,8 @@ import { WebSocket } from 'ws';
 import { createApp } from '../server/server.js';
 import { activeEvent } from '../public/sport.js';
 
-function connect(base, role = 'control', mode = 'live', origin = base) {
-  const ws = new WebSocket(`${base.replace('http:', 'ws:')}/ws?role=${role}&mode=${mode}`, { origin });
+function connect(base, role = 'control', origin = base) {
+  const ws = new WebSocket(`${base.replace('http:', 'ws:')}/ws?role=${role}`, { origin });
   const events = new EventEmitter();
   const inbox = [];
   let serial = 0;
@@ -26,7 +26,7 @@ function connect(base, role = 'control', mode = 'live', origin = base) {
       };
       const timeout = setTimeout(() => {
         events.off('data', search);
-        reject(new Error(`No matching WebSocket message (${role}, ${mode})`));
+        reject(new Error(`No matching WebSocket message (${role})`));
       }, 2000);
       events.on('data', search);
       search();
@@ -43,7 +43,7 @@ function connect(base, role = 'control', mode = 'live', origin = base) {
   };
 }
 
-test('control and output stay in sync, rehearsals stay isolated, and a restart restores the race', async (t) => {
+test('control and output stay in sync and a restart restores the race', async (t) => {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'yanzhou-test-'));
   let app = createApp({ dataDir });
   t.after(async () => { await app.close(); await rm(dataDir, { recursive: true, force: true }); });
@@ -54,33 +54,30 @@ test('control and output stay in sync, rehearsals stay isolated, and a restart r
   assert.equal((await fetch(`${base}/data/settings.json`)).status, 404);
   const operator = connect(base);
   const output = connect(base, 'view');
-  const rehearsal = connect(base, 'control', 'demo');
-  const [live, view, practice] = await Promise.all([operator.state(), output.state(), rehearsal.state()]);
+  const [live, view] = await Promise.all([operator.state(), output.state()]);
   assert.equal(live.events.length, 6);
   assert.ok(live.events.every(({ schedule }) => schedule));
-  assert.ok(practice.events.every(({ schedule }) => schedule));
   assert.equal(view.events.length, 1);
   assert.equal(activeEvent(live).competitors.length, 0);
-  assert.equal(activeEvent(practice).competitors.length, 8);
   assert.equal((await output.command('module:clear')).ok, false);
-  assert.equal((await rehearsal.command('module:clear')).ok, true);
-  assert.equal((await rehearsal.state(1)).modules.brand.visible, false);
-  assert.equal((await operator.command('athlete:import', { eventId: live.activeEventId, rows: [{ name: '测试选手', bib: '1', result: '2:05.00' }] })).ok, true);
-  const raced = await output.state(1);
-  assert.equal(raced.modules.brand.visible, true);
+  assert.equal((await operator.command('module:clear')).ok, true);
+  assert.equal((await output.state(1)).modules.brand.visible, false);
+  assert.equal((await operator.command('athlete:save', { eventId: live.activeEventId, fields: { name: '测试选手', bib: '1', result: '2:05.00' } })).ok, true);
+  const raced = await output.state(2);
+  assert.equal(raced.modules.brand.visible, false);
   assert.equal(activeEvent(raced).competitors[0].time, 125000);
-  assert.equal(JSON.parse(await readFile(path.join(dataDir, 'settings.json'), 'utf8')).revision, 1);
-  const denied = connect(base, 'control', 'live', 'https://other.example');
+  assert.equal(JSON.parse(await readFile(path.join(dataDir, 'settings.json'), 'utf8')).revision, 2);
+  const denied = connect(base, 'control', 'https://other.example');
   const code = await new Promise((resolve) => denied.ws.once('unexpected-response', (_, res) => { res.resume(); resolve(res.statusCode); }));
   denied.ws.terminate();
   assert.equal(code, 403);
   await app.close();
   app = createApp({ dataDir });
   base = `http://127.0.0.1:${await app.listen(0)}`;
-  const resumed = await connect(base, 'view').state(1);
+  const resumed = await connect(base, 'view').state(2);
   assert.equal(activeEvent(resumed).competitors[0].name, '测试选手');
   assert.equal(activeEvent(resumed).competitors[0].time, 125000);
-  assert.equal((await connect(base, 'view', 'demo').state(1)).modules.brand.visible, false);
+  assert.equal(resumed.modules.brand.visible, false);
 });
 
 test('switching divisions restores each event graphics, results, and on-air page after restart', async (t) => {
@@ -101,9 +98,8 @@ test('switching divisions restores each event graphics, results, and on-air page
   }
   await send('event:select', { eventId: men });
   const roster = Array.from({ length: 8 }, (_, i) => ({ name: `男子选手${i + 1}`, bib: String(i + 1), result: String(260 + i) }));
-  await send('athlete:import', { eventId: men, rows: roster });
+  for (const [index, row] of roster.entries()) await send('athlete:save', { eventId: men, fields: { ...row, lane: index + 1 } });
   await send('meet:save', { eventId: men, title: '男子组', accent: '#c58546' });
-  await send('text:save', { eventId: men, key: 'notice', fields: { title: '赛后', body: '男子组颁奖' }, visible: true });
   await send('module:save', { key: 'results', eventId: men, patch: { visible: true, x: 230, scale: 80 } });
   await send('page:set', { key: 'results', eventId: men, page: 1 });
   await send('event:select', { eventId: women });
@@ -111,10 +107,9 @@ test('switching divisions restores each event graphics, results, and on-air page
   assert.equal(activeEvent(femaleSnap).stage, '女子决赛');
   assert.deepEqual(activeEvent(femaleSnap).competitors, []);
   assert.equal(femaleSnap.modules.results.visible, false);
-  assert.equal(femaleSnap.notice.body, '');
   assert.equal(femaleSnap.meet.title, '烟洲体育');
   assert.match((await operator.command('module:clear', { eventId: men })).error, /赛事已切换/);
-  await send('athlete:import', { eventId: women, rows: [{ name: '女子选手', bib: '1', result: '285.22' }] });
+  await send('athlete:save', { eventId: women, fields: { name: '女子选手', bib: '1', result: '285.22' } });
   await send('module:clear', { eventId: women });
   await send('event:select', { eventId: men });
   const maleSnap = await output.state(revision);
@@ -124,7 +119,6 @@ test('switching divisions restores each event graphics, results, and on-air page
   assert.equal(maleSnap.modules.results.scale, 80);
   assert.equal(maleSnap.modules.results.visible, true);
   assert.equal(maleSnap.pages.results, 1);
-  assert.equal(maleSnap.notice.body, '男子组颁奖');
   assert.equal(maleSnap.meet.accent, '#c58546');
   await app.close();
   app = createApp({ dataDir });

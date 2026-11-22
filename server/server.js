@@ -17,7 +17,7 @@ const MAX_STATE_BYTES = 5 * 1024 * 1024;
 const CSP = "default-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:*; img-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self'";
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png' };
 
-function readSettings(file, demo) {
+function readSettings(file) {
   try {
     const stored = verifyState(JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, '')));
     const state = migrateState(stored);
@@ -25,7 +25,7 @@ function readSettings(file, demo) {
     return state;
   }
   catch (error) {
-    if (error.code === 'ENOENT') return initialState(demo);
+    if (error.code === 'ENOENT') return initialState();
     throw new Error(`无法读取 ${file}：${error.message}`);
   }
 }
@@ -63,10 +63,8 @@ function reply(req, res, status, type, data) {
 }
 
 export function createApp({ dataDir = path.join(ROOT, 'data'), now = () => Math.floor(performance.timeOrigin + performance.now()) } = {}) {
-  const sessions = Object.fromEntries(['live', 'demo'].map((key) => {
-    const file = path.join(dataDir, key === 'live' ? 'settings.json' : 'rehearsal.json');
-    return [key, { file, state: readSettings(file, key === 'demo') }];
-  }));
+  const dataFile = path.join(dataDir, 'settings.json');
+  const session = { file: dataFile, state: readSettings(dataFile) };
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024, perMessageDeflate: false });
   const server = http.createServer(async (req, res) => {
     const plain = MIME['.html'].replace('text/html', 'text/plain');
@@ -105,16 +103,15 @@ export function createApp({ dataDir = path.join(ROOT, 'data'), now = () => Math.
     let url;
     try { url = new URL(req.url, 'http://127.0.0.1'); }
     catch { socket.destroy(); return; }
-    const mode = url.searchParams.get('mode') ?? 'live';
     const role = url.searchParams.get('role');
-    if (!hostAllowed(server, req) || url.pathname !== '/ws' || !Object.hasOwn(sessions, mode) ||
+    if (!hostAllowed(server, req) || url.pathname !== '/ws' ||
         !['view', 'control'].includes(role) || req.headers.origin !== `http://${req.headers.host}`) {
       socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
       return;
     }
     wss.handleUpgrade(req, socket, head, (client) => {
       client.role = role;
-      client.session = sessions[mode];
+      client.session = session;
       wss.emit('connection', client);
     });
   });

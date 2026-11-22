@@ -10,6 +10,7 @@ function operator(id) {
     get state() { return state; },
     get event() { return activeEvent(state); },
     send(action, fields = {}, now = 0) { state = applyCommand(state, { action, eventId: state.activeEventId, ...fields }, now); },
+    roster(rows, eventId) { for (const row of rows) this.send('athlete:save', { eventId: eventId ?? state.activeEventId, fields: row }); },
   };
   app.send('event:select', { eventId: id });
   return app;
@@ -29,43 +30,23 @@ test('school schedule keeps 800 m and 1000 m while the other events stay comment
   assert.equal(checkInTime(timed[0].schedule.start), '13:50');
   assert.equal(SCHOOL_RACES.filter((event) => event.schedule.round === 'heat').length, 0);
   assert.equal(SCHOOL_RACES.filter(({ schedule }) => schedule.project === 'run-800').length, 4);
-  assert.equal(verifyState(initialState()).version, 8);
+  assert.equal(verifyState(initialState()).version, 9);
 });
 
 test('upgrade removes empty generic presets and retains actual registrations and the current school race', () => {
   const app = operator('school-g2-men-run-800-final');
-  app.send('athlete:import', { rows: [{ name: '正式选手', result: '12.34', heat: 2 }] });
+  app.roster([{ name: '正式选手', result: '12.34', heat: 2 }]);
   const { schedule, ...preset } = structuredClone(initialState().events.find(({ id }) => id === 'school-g1-men-run-1000-final'));
   const blank = { ...preset, id: 'run-1000' };
   const registered = { ...structuredClone(preset), id: 'run-1000-women', division: 'women', competitors: app.event.competitors };
   const old = { ...app.state, version: 4, events: [blank, registered, ...app.state.events] };
   const updated = verifyState(migrateState(verifyState(old)));
-  assert.equal(updated.version, 8);
+  assert.equal(updated.version, 9);
   assert.equal(updated.activeEventId, old.activeEventId);
   assert.deepEqual(updated.events, [registered, ...app.state.events]);
   const previousActive = verifyState(migrateState({ ...old, activeEventId: blank.id }));
   assert.equal(previousActive.activeEventId, SCHOOL_RACES[0].id);
   assert.strictEqual(migrateState(updated), updated);
-});
-
-test('old rehearsal examples move into school program events', () => {
-  const rehearsal = initialState(true);
-  const targets = { 'run-1000': 'school-g1-men-run-1000-final' };
-  const legacy = Object.entries(targets).map(([id, targetId]) => {
-    const { schedule, ...sample } = rehearsal.events.find((event) => event.id === targetId);
-    return { ...sample, id };
-  });
-  const blank = initialState();
-  const migrated = verifyState(migrateState(verifyState({ ...blank, version: 4, activeEventId: 'run-1000', events: [...legacy, ...blank.events] })));
-  assert.equal(migrated.events.length, 6);
-  assert.equal(migrated.activeEventId, targets['run-1000']);
-  for (const [id, targetId] of Object.entries(targets)) {
-    const selected = migrated.events.find((event) => event.id === targetId);
-    const source = legacy.find((event) => event.id === id);
-    assert.deepEqual(selected.competitors, source.competitors);
-    assert.equal(selected.clock, undefined);
-    assert.equal(selected.splits, undefined);
-  }
 });
 
 // 100 米预赛分组和晋级先不用，秩序册恢复后再打开。
@@ -80,11 +61,11 @@ test('confirmed class scores apply record multipliers and discard stale confirma
   const first = 'school-g1-women-run-800-final';
   const second = 'school-g2-women-run-800-final';
   const app = operator(first);
-  app.send('athlete:import', { rows: [{ name: '甲', team: '高一（1）班', result: '2:10.00' }, { name: '乙', team: '2班', result: '2:20.00' }] });
+  app.roster([{ name: '甲', team: '高一（1）班', result: '2:10.00' }, { name: '乙', team: '2班', result: '2:20.00' }]);
   app.send('points:confirm', { scored: true });
   assert.equal(classStandings(app.state.events).g1[0].total, 18);
   app.send('event:select', { eventId: second });
-  app.send('athlete:import', { rows: [{ name: '丙', team: '1班', result: '2:05.00' }] });
+  app.roster([{ name: '丙', team: '1班', result: '2:05.00' }]);
   app.send('points:confirm', { scored: true });
   assert.equal(classStandings(app.state.events).g1[0].total, 9);
   assert.equal(classStandings(app.state.events).g2[0].total, 18);

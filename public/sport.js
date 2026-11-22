@@ -9,11 +9,9 @@ export const MODULES = {
   brand:   { title: 'Logo 挂角', icon: 'image', corner: 'tl', w: 609, h: 118, visible: true },
   event:   { title: '赛事条', icon: 'list', corner: 'bl', w: 680, h: 112, visible: true },
   score:   { title: '球赛记分牌', icon: 'score', corner: 'tr', w: 660, h: 144, visible: true, kind: 'match' },
-  lineup:  { title: '起跑介绍', icon: 'people', x: 120, y: 690, w: 1680, h: 168, visible: false },
-  results: { title: '冠军', icon: 'chart', x: 1380, y: 380, w: 420, h: 260, visible: false },
+  lineup:  { title: '起跑介绍', icon: 'people', x: 240, y: 650, w: 1520, h: 280, visible: false },
+  results: { title: '冠军', icon: 'chart', x: 1460, y: 530, w: 340, h: 400, visible: false },
   teams:   { title: '班级积分', icon: 'chart', x: 436, y: 220, w: 1048, h: 636, visible: false },
-  athlete: { title: '人物条', icon: 'person', corner: 'bl', w: 670, h: 104, visible: false },
-  notice:  { title: '公告', icon: 'notice', corner: 'br', w: 1120, h: 122, scale: 90, visible: false },
 };
 
 export const KINDS = { track: '径赛', field: '田赛', match: '球赛', ranking: '团体' };
@@ -80,7 +78,7 @@ export function activeEvent(state) {
 
 export function applicable(key, event) {
   if (key === 'teams') return ['g1', 'g2'].includes(event?.schedule?.grade);
-  if (!event) return ['brand', 'athlete', 'notice'].includes(key);
+  if (!event) return key === 'brand';
   if (key === 'lineup' && event?.kind === 'match') return false;
   return !MODULES[key].kind || MODULES[key].kind === event?.kind;
 }
@@ -118,7 +116,6 @@ export function clamp(value, min, max) {
 export function defaultLayout(key) {
   const { visible, corner, x, y, scale = 100 } = MODULES[key];
   const position = corner ? safeAnchor(key, scale, corner) : { x, y, scale };
-  if (key === 'athlete') position.y -= MODULES.event.h + SAFE_AREA.padding;
   return { visible, ...position, opacity: 100, enter: 'fade', exit: 'fade', duration: 260 };
 }
 
