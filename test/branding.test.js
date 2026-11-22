@@ -22,14 +22,14 @@ test('default branding is inside the 1080p safe area, with spacing for adjacent 
   assert.equal(showBrandCorner('modern', true, null, corner, []), true);
 });
 
-test('modern channel omits subtitles and legacy keeps its escaped subtitle', () => {
+test('modern channel shows only the wordmark and legacy keeps its seal and escaped subtitle', () => {
   const modern = brandGraphic('modern', '<现场>');
-  assert.match(modern, /src="\/assets\/yanzhou-seal\.png"/);
-  assert.match(modern, /YZBTVS <span>SPORT<\/span>/);
-  assert.doesNotMatch(modern, /<small>|现场/);
+  assert.match(modern, /^<div class="branding-channel">\s*<img src="\/assets\/branding\/yanzhou-channel-wordmark\.png" alt="YZBTVS SPORT"[^>]*>\s*<\/div>$/);
+  assert.doesNotMatch(modern, /yanzhou-seal|<small>|现场/);
   assert.doesNotMatch(brandGraphic('modern', ''), /<small>|烟洲体育/);
 
   const legacy = brandGraphic('legacy', '<现场>');
+  assert.match(legacy, /yanzhou-seal\.png/);
   assert.match(legacy, /yanzhou-sport-wordmark\.png/);
   assert.match(legacy, /<small>&lt;现场&gt;<\/small>/);
 });
@@ -86,11 +86,11 @@ test('preview loads the production renderer without WebSocket with only the left
   assert.match(html, /src="\/overlay.js"/);
   const css = await readFile(new URL('../public/branding.css', import.meta.url), 'utf8');
   assert.match(css, /\/assets\/track-preview\.png/);
-  assert.match(css, /\.branding-channel\s*\{[^}]*color:\s*#ffffff\b/);
-  assert.doesNotMatch(css, /branding-silver|background-clip/);
   const overlay = await renderOverlay(t, '', true);
   assert.equal(overlay.connected, false);
-  assert.match(overlay.node('layer--brand').children[0].innerHTML, /branding-channel/);
+  const channel = overlay.node('layer--brand').children[0].innerHTML;
+  assert.match(channel, /yanzhou-channel-wordmark\.png/);
+  assert.doesNotMatch(channel, /yanzhou-seal\.png/);
   assert.match(overlay.node('branding-corner--br').innerHTML, /^<img src="\/assets\/branding\/yanzhou-zhou-gold-mark\.png"[^>]*>$/);
   assert.equal(overlay.node('branding-corner--tr'), undefined);
   assert.equal(overlay.node('branding-corner--br').hidden, false);

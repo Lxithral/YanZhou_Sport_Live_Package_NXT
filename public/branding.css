@@ -1,33 +1,14 @@
-.branding-channel, .branding-corner {
-  font-family: "Noto Sans CJK SC", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
-  color: #fffaf0;
-  text-shadow: 0 1px 2px #17131b, 0 2px 5px #17131bd9;
-}
-
 .branding-channel {
-  color: #ffffff;
   display: flex;
   align-items: center;
   width: 330px;
   height: 82px;
-  gap: 12px;
 }
 
-.branding-channel .school-seal {
-  width: 66px;
-  height: 66px;
-  filter: drop-shadow(0 2px 4px #17131bbb);
-}
-
-.branding-channel strong {
-  font: 900 38px/1 "Segoe UI", Arial, sans-serif;
-  letter-spacing: -.035em;
-  white-space: nowrap;
-}
-
-.branding-channel strong span {
-  font-size: .65em;
-  letter-spacing: .045em;
+.branding-channel img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .branding-corner {
