@@ -120,6 +120,9 @@ try {
   await click('[data-theme-option="dark"]');
   await until('document.documentElement.dataset.theme === "dark"', 'dark theme pinned');
   assert.equal(await evaluate('document.querySelectorAll("#module-list .module-card").length'), 4, 'four layer cards');
+  if (await evaluate('CSS.supports("appearance", "base-select")')) {
+    assert.equal(await evaluate('document.querySelector(".intro-controls .select-display") !== null'), true, 'themed select trigger rendered');
+  }
   report.checks.push('The roster lists the seeded athletes and the layer cards render in the output column.');
 
   // 1) 冠军流程：点冠军 → 行下展开成绩栏（不上屏）→ 推送成绩 → 点显示上屏。
@@ -133,6 +136,8 @@ try {
   await click('[data-action="champion-show"]');
   await until('document.querySelector("#preview").contentDocument?.querySelector(".winner-name")?.textContent.includes("林浩宇")', 'champion card shows the athlete');
   assert.equal(await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".winner-time")?.textContent'), '02:05.00');
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".winner-crown")?.textContent.includes("冠军")'), true, 'crown band on the champion card');
+  await screenshot('control-champion.png');
   assert.equal(await evaluate('document.querySelector(\'[data-action="module-toggle"][data-key="results"]\').getAttribute("aria-pressed")'), 'true', 'champion layer on air after show');
   assert.equal(await evaluate('document.querySelector("#layer-count").textContent'), '上屏 3 / 4');
   report.checks.push('Champion flow: pick the athlete, push the score in the inline pane, then show the champion card.');

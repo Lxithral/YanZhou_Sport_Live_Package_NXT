@@ -143,6 +143,39 @@ input[type=number] { appearance: textfield; }
 input[type=number]::-webkit-inner-spin-button { opacity: 1; }
 input[type=checkbox] { accent-color: var(--accent); }
 
+/* ───── 深色下拉菜单（appearance: base-select） ───── */
+@supports (appearance: base-select) {
+  select:has(> .select-display), select:has(> .select-display)::picker(select) { appearance: base-select; }
+  select:has(> .select-display) { display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--raised); background-image: none; box-shadow: inset 0 0 0 1px var(--line-2); }
+  select:has(> .select-display) > .select-display { display: flex; align-items: center; flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; color: inherit; font: inherit; background: transparent; box-shadow: none; text-align: left; }
+  select:has(> .select-display) selectedcontent { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  select:has(> .select-display)::picker-icon { content: ''; flex: none; width: 10px; height: 6px; margin-left: auto; background: var(--chevron) no-repeat center; transition: transform 160ms var(--ease); }
+  select:has(> .select-display):open { box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-soft); }
+  select:has(> .select-display):open::picker-icon { transform: rotate(180deg); }
+  select:has(> .select-display)::picker(select) {
+    width: max(anchor-size(width), 260px);
+    max-width: calc(100vw - 24px);
+    max-height: min(380px, 56dvh);
+    margin-block: 6px;
+    padding: 6px;
+    border: 1px solid var(--line-2);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: var(--shadow-pop);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-3) transparent;
+  }
+  select:has(> .select-display) option { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 7px 10px; border-radius: var(--r-sm); background: transparent; color: var(--text); font: inherit; font-size: 12.5px; font-weight: 500; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
+  select:has(> .select-display) option:disabled { color: var(--faint); opacity: .65; }
+  select:has(> .select-display) option:checked { background: var(--accent-soft); color: var(--accent); }
+  select:has(> .select-display) option:is(:hover, :focus-visible) { background: var(--hover); outline: none; }
+  select:has(> .select-display) option:checked:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--accent) 24%, var(--panel)); }
+  select:has(> .select-display) option::checkmark { order: 1; flex: none; margin-left: auto; color: var(--accent); }
+}
+
 /* ───── 顶栏 ───── */
 .app-header {
   flex: none; min-height: 56px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto;

@@ -84,9 +84,14 @@ function championGraphic(event) {
   const name = winner?.athlete.name || '等待冠军';
   const time = winner ? resultText(winner.athlete, event) : '—';
   const nameSize = Math.min(64, Math.max(24, Math.floor(272 / [...name].length)));
-  const timeSize = Math.min(60, Math.max(24, Math.floor(272 / (time.length * .62))));
+  const timeSize = Math.min(46, Math.max(22, Math.floor(260 / (time.length * .62))));
   return `<div class="winner-card" aria-label="第一名">
-    <strong class="winner-name" style="--name-size: ${nameSize}px">${h(name)}</strong>
+    <div class="winner-crown">冠军</div>
+    <span class="winner-medal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4zM7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3"/></svg></span>
+    <div class="winner-body">
+      <strong class="winner-name" style="--name-size: ${nameSize}px">${h(name)}</strong>
+      <span class="winner-rule" aria-hidden="true"></span>
+    </div>
     <span class="winner-time" style="--time-size: ${timeSize}px">${h(time)}</span>
   </div>`;
 }

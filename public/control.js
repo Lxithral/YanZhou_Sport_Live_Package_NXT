@@ -116,11 +116,25 @@ function renderRoster() {
   if (rosterEditing && !$('#roster-editor form')) rosterEditing = null;
 }
 
+// 可定制下拉：给原生 select 注入触发器，配合 appearance: base-select 渲染成深色菜单
+function initThemedSelects(root = document) {
+  if (!CSS.supports('appearance', 'base-select')) return;
+  for (const select of root.querySelectorAll('select:not([multiple])')) {
+    if (select.querySelector(':scope > .select-display')) continue;
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'select-display';
+    trigger.append(document.createElement('selectedcontent'));
+    select.prepend(trigger);
+  }
+}
+
 function renderLayers(event) {
   const available = Object.keys(MODULES).filter((key) => !HIDDEN_LAYERS.includes(key) && applicable(key, event));
   const visible = available.filter((key) => state.modules[key].visible).length;
   $('#layer-count').textContent = `上屏 ${visible} / ${available.length}`;
   updateRegion('#module-list', moduleList(state, event, layoutKey));
+  initThemedSelects($('#module-list'));
 }
 
 function renderLayout() {

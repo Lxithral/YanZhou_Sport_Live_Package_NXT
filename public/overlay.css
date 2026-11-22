@@ -151,6 +151,24 @@ html, body, #stage { background: transparent !important; }
 .intro-stub::before { content: ''; position: absolute; inset: 4px; clip-path: polygon(24% 0, 100% 0, 76% 100%, 0 100%); background: linear-gradient(105deg, var(--wine), var(--wine-dark)); pointer-events: none; }
 .intro-name { position: relative; max-width: 100%; overflow: hidden; font-size: var(--name-size, 76px); line-height: 1.3; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
 
-.winner-card { position: relative; width: 340px; height: 400px; display: grid; grid-template-rows: 1fr 1fr; align-items: center; justify-items: center; padding: 24px 30px; overflow: hidden; border: 3px solid var(--wine); border-radius: 7px; background: linear-gradient(160deg, var(--paper-light), var(--paper)); color: var(--ink); box-shadow: 0 8px 20px #200b192e; font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif; text-align: center; }
-.winner-name { max-width: 100%; overflow: hidden; font-size: var(--name-size, 64px); line-height: 1.35; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
-.winner-time { max-width: 100%; overflow: hidden; color: var(--wine); font-size: var(--time-size, 60px); line-height: 1.3; font-weight: 800; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.winner-card {
+  position: relative; width: 340px; height: 400px; display: grid;
+  grid-template-rows: 68px auto minmax(0, 1fr) auto;
+  padding: 0 24px 26px; overflow: hidden;
+  border: 3px solid var(--wine); border-radius: 10px;
+  background:
+    repeating-linear-gradient(135deg, #00000003 0 3px, transparent 3px 10px),
+    radial-gradient(130% 100% at 50% -20%, #fffdf7 0%, var(--paper-light) 42%, var(--paper) 100%);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px #e6c08ab3, 0 18px 40px #200b1940;
+  font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+  text-align: center;
+}
+.winner-crown { align-self: stretch; margin: 0 -24px; display: grid; place-items: center; padding-bottom: 24px; background: linear-gradient(120deg, var(--wine), var(--wine-dark)); border-bottom: 3px solid var(--accent); color: var(--paper-light); font-size: 22px; font-weight: 800; letter-spacing: .44em; text-indent: .44em; }
+.winner-medal { justify-self: center; margin-top: -20px; z-index: 1; width: 58px; height: 58px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(160deg, #f7e3b8, #dfb273 52%, #bb8a4b); box-shadow: 0 0 0 4px var(--paper-light), 0 0 0 5px #e6c08a99, 0 8px 16px #200b1933; color: var(--wine-dark); }
+.winner-medal svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.winner-body { align-self: center; display: grid; justify-items: center; gap: 14px; min-height: 0; padding: 8px 0; }
+.winner-name { max-width: 100%; overflow: hidden; font-size: var(--name-size, 64px); line-height: 1.24; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.winner-rule { position: relative; width: 110px; height: 3px; border-radius: 2px; background: linear-gradient(90deg, transparent, #d8a566 22% 78%, transparent); }
+.winner-rule::after { content: ''; position: absolute; left: 50%; top: 50%; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; transform: rotate(45deg); background: #d8a566; box-shadow: 0 0 0 3px var(--paper-light); }
+.winner-time { align-self: end; margin: 0 -24px -26px; padding: 12px 16px 14px; display: grid; place-items: center; min-width: 0; background: linear-gradient(120deg, var(--wine-dark), var(--wine)); border-top: 3px solid var(--accent); border-radius: 0 0 7px 7px; color: var(--paper-light); font-size: var(--time-size, 44px); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
