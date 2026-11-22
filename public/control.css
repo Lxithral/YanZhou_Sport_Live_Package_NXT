@@ -45,6 +45,7 @@
   --stage-checker-b: #1a1d21;
   --canvas-checker-a: #3c3839;
   --canvas-checker-b: #2d2a2d;
+  --canvas-dark: #242529;
   --backdrop: #08090bbd;
   --rank-row: 38px;
   --roster-row: 36px;
@@ -89,6 +90,7 @@ html[data-theme=light] {
   --stage-checker-b: #cfd3d9;
   --canvas-checker-a: #9da2aa;
   --canvas-checker-b: #9298a1;
+  --canvas-dark: #e6e8ec;
   --backdrop: #0b0d1240;
   --shadow-pop: 0 12px 32px #0b0d1229, 0 0 0 1px #0b0d121a;
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235d616b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
@@ -355,16 +357,27 @@ body[data-live="true"] .live-dot { background: var(--live); box-shadow: 0 0 0 3p
 .preview-toolbar, .focus-heading { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 0 13px; background: var(--panel-head); border-bottom: 1px solid var(--line); border-radius: var(--r-lg) var(--r-lg) 0 0; }
 .preview-live, .preview-tools { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .canvas-dimensions, .preview-zoom, .focus-scale { flex: none; padding: 1px 7px; border-radius: 5px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); color: var(--muted); font: 11px/18px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.background-switch { display: flex; flex: none; gap: 2px; padding: 2px; border-radius: 7px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line); }
+.background-switch button { display: grid; place-items: center; width: 26px; height: 22px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--muted); }
+.background-switch button:hover { color: var(--text); background: var(--hover); }
+.background-switch button[aria-pressed=true] { background: var(--raised); box-shadow: inset 0 0 0 1px var(--line-3); color: var(--text); }
+.bg-sample { display: block; width: 14px; height: 12px; border-radius: 3px; }
+.bg-sample.dark { background: var(--canvas-dark); box-shadow: inset 0 0 0 1px var(--line-3); }
+.bg-sample.checker { background: repeating-conic-gradient(var(--canvas-checker-a) 0% 25%, var(--canvas-checker-b) 0% 50%) 0 0 / 8px 8px; }
+.tool-separator { width: 1px; height: 18px; background: var(--line-2); }
 .check-field { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
 .check-field input { margin: 0; }
 .preview-stage { flex: 1; min-height: 0; position: relative; display: grid; place-items: center; padding: 14px 14px 30px; background: repeating-conic-gradient(var(--stage-checker-a) 0% 25%, var(--stage-checker-b) 0% 50%) 0 0 / 28px 28px; border-radius: 0 0 var(--r-lg) var(--r-lg); }
+.preview-stage[data-backdrop=dark] { background: var(--page); }
 .stage-hint { position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%); color: var(--faint); font-size: 10.5px; white-space: nowrap; pointer-events: none; opacity: .8; }
 .monitor-canvas { border-radius: 5px; overflow: hidden; background: repeating-conic-gradient(var(--canvas-checker-a) 0% 25%, var(--canvas-checker-b) 0% 50%) 0 0 / 32px 32px; box-shadow: 0 0 0 1px var(--line-3), 0 18px 40px -22px #000; }
+.preview-stage[data-backdrop=dark] .monitor-canvas { background: var(--canvas-dark); }
 .monitor-canvas iframe { display: block; width: 100%; height: 100%; border: 0; color-scheme: normal; }
 .focus-heading { gap: 8px; }
 .focus-heading h2 { font-size: 12.5px; }
 .focus-heading h2::before { width: 5px; height: 5px; background: var(--faint); }
 .focus-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; background: repeating-conic-gradient(var(--stage-checker-a) 0% 25%, var(--stage-checker-b) 0% 50%) 0 0 / 28px 28px; border-radius: 0 0 var(--r-lg) var(--r-lg); }
+.focus-stage[data-backdrop=dark] { background: var(--page); }
 #focus-frame { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; border: 0; transform-origin: 0 0; pointer-events: none; color-scheme: normal; }
 
 /* ───── 比赛操作条 ───── */

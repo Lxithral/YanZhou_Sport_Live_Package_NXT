@@ -8,6 +8,7 @@ import { GRADES, MODULES, activeEvent, applicable, clamp, eventRound, eventTitle
 
 const $ = (selector) => document.querySelector(selector);
 const workspace = $('.app-shell');
+const stages = Array.from(document.querySelectorAll('.preview-stage, .focus-stage'));
 const canvas = document.querySelector('.monitor-canvas');
 const preview = $('#preview');
 const output = pageUrl('overlay');
@@ -29,10 +30,12 @@ let layoutKey = 'brand';
 const collapsedSections = new Set(['appearance', 'motion']);
 let layoutDirty = false;
 let layoutModel;
+let backdrop = 'grid';
 let guides = true;
 
 try {
   const prefs = JSON.parse(localStorage.getItem('yanzhou-sports-preview'));
+  if (['grid', 'dark'].includes(prefs?.backdrop)) backdrop = prefs.backdrop;
   if (typeof prefs?.guides === 'boolean') guides = prefs.guides;
 } catch { /* Preserve defaults if browser storage is unavailable. */ }
 
@@ -42,7 +45,9 @@ const initialIcons = {
 };
 for (const [selector, glyph] of Object.entries(initialIcons)) $(selector).insertAdjacentHTML('afterbegin', icon(glyph));
 $('#open-output').href = output;
+for (const stage of stages) stage.dataset.backdrop = backdrop;
 $('#monitor-guides').checked = guides;
+syncBackdropButtons();
 
 function setWorkspace(key) {
   workspace.dataset.workspace = key;
@@ -60,9 +65,14 @@ function setTableView(view) {
   setWorkspace('work');
 }
 
+function syncBackdropButtons() {
+  document.querySelectorAll('[data-action="backdrop"]').forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.key === backdrop)));
+}
+
 function saveMonitorPreferences() {
+  for (const stage of stages) stage.dataset.backdrop = backdrop;
   guides = $('#monitor-guides').checked;
-  try { localStorage.setItem('yanzhou-sports-preview', JSON.stringify({ guides })); } catch { /* The current preview still updates. */ }
+  try { localStorage.setItem('yanzhou-sports-preview', JSON.stringify({ backdrop, guides })); } catch { /* The current preview still updates. */ }
   tellPreview();
 }
 $('#monitor-guides').addEventListener('change', saveMonitorPreferences);
@@ -525,6 +535,7 @@ const handlers = {
   meet() { dialogs.meet(state, output); },
   'work-view'({ key }) { setTableView(key); },
   'module-select'({ key }) { selectModule(key); },
+  backdrop({ key }) { backdrop = key; saveMonitorPreferences(); syncBackdropButtons(); },
   async 'layout-reset'() {
     const eventId = state.activeEventId;
     const key = layoutKey;
