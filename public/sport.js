@@ -48,22 +48,36 @@ export function formatTime(ms, fractions = true, roundUp = false) {
   return fractions ? `${time}.${pad(centiseconds % 100)}` : time;
 }
 
+// 成绩录入不做严格格式检查：常见写法（73.5、1:13.5、1分13秒5、1'13''5）都能识别。
+function normalizeScore(source) {
+  return String(source).trim()
+    .replace(/[０-９]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xfee0))
+    .replace(/．/g, '.')
+    .replace(/：/g, ':')
+    .replace(/[’′´]/g, '\'');
+}
+
 export function parseTime(source) {
-  const value = String(source).trim();
-  if (!/^(?:\d{1,4}:[0-5]\d|\d{1,5})(?:\.\d{1,2})?$/.test(value)) {
-    throw new Error('请输入秒数或 分:秒.百分秒，例如 12.35 或 03:21.52。');
-  }
-  const parts = value.split(':');
-  const seconds = Number(parts.pop()) + (parts.length ? Number(parts[0]) * 60 : 0);
-  const ms = Math.round(seconds * 100) * 10;
+  const value = normalizeScore(source)
+    .replace(/分/g, ':')
+    .replace(/秒/g, '\'')
+    .replace(/'{1,2}/g, ':')
+    .replace(/:+$/, '');
+  const colon = /^(\d{1,3}):(.+)$/.exec(value);
+  const rest = colon ? colon[2] : value;
+  const match = /^(\d{1,5})(?:[.:](\d{1,2}))?$/.exec(rest);
+  if (!match) throw new Error('这个成绩看不懂，换一种写法试试，例如 73.5、1:13.5 或 1分13秒5。');
+  const minutes = colon ? Number(colon[1]) : 0;
+  const seconds = Number(match[1]) + (match[2] ? Number(`0.${match[2]}`) : 0);
+  const ms = Math.round((minutes * 60 + seconds) * 1000);
   if (ms > MAX_DURATION) throw new Error('时长不能超过 24 小时。');
   return ms;
 }
 
 export function parseMark(raw) {
-  const value = String(raw).trim().replace(/\s*(?:m|米)$/i, '');
+  const value = normalizeScore(raw).replace(/\s*(?:m|米)$/i, '').replace(/^(\d{1,3})米(\d{1,2})$/, '$1.$2');
   if (!/^\d{1,3}(?:\.\d{1,2})?$/.test(value) || Number(value) === 0) {
-    throw new Error('请输入大于 0 的米数，最多两位小数，例如 5.32。');
+    throw new Error('这个成绩看不懂，换一种写法试试，例如 5.32 或 5米32。');
   }
   return Math.round(Number(value) * 100);
 }
@@ -170,6 +184,10 @@ export function canJump(event, athlete) {
   return canRank(athlete) && jumpFailures(athlete) < 3 && (!last || bar > last.height || (bar === last.height && last.outcome === 'X'));
 }
 
+export function canRank(athlete) {
+  return athlete.status === 'ok' || athlete.status === 'pending';
+}
+
 export function relayRegistration(athlete) {
   if (athlete.boys == null || athlete.girls == null) return '待核验';
   return athlete.boys === 5 && athlete.girls === 5 ? '5 男 / 5 女' : '人数不符';
@@ -187,10 +205,6 @@ function compareMarks(a, b, event) {
   const first = faults(a);
   const second = faults(b);
   return first[0] - second[0] || first[1] - second[1] || 0;
-}
-
-export function canRank(athlete) {
-  return athlete.status === 'ok' || athlete.status === 'pending';
 }
 
 export function standings(event) {

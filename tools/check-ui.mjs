@@ -43,8 +43,6 @@ const race = activeEvent(seed);
 race.competitors = ['林浩宇', '陈子航', '陆晨曦', '吴思远', '苏乐扬', '张铭轩', '周予安', '韩东辰'].map((name, index) => ({
   id: `seed-${index + 1}`, name, lane: index + 1, bib: String(101 + index), team: `${index + 1}班`, time: null, attempts: [], status: 'pending', heat: 1,
 }));
-race.competitors[0].time = 201520;
-race.competitors[0].status = 'ok';
 race.competitors[4].name = '阿卜杜拉甲';
 await writeFile(path.join(temporary, 'settings.json'), JSON.stringify(seed));
 
@@ -116,56 +114,65 @@ try {
   await cdp('Page.enable');
   await viewport(1920, 1080);
   await cdp('Page.navigate', { url: base + '/control.html' });
-  await until('document.querySelector("#connection")?.classList.contains("connection--online") && document.querySelector("#rank-rows")?.textContent.includes("林浩宇")', 'control connected');
+  await until('document.querySelector("#connection")?.classList.contains("connection--online") && document.querySelector("#roster-rows")?.textContent.includes("林浩宇")', 'control connected');
 
-  assert.equal(await evaluate('document.querySelector("#quick-entry").hidden'), false, 'quick entry is inline and visible');
   // 无头浏览器默认报告浅色系统主题，先固定成深色，保证截图可复现
   await click('[data-theme-option="dark"]');
   await until('document.documentElement.dataset.theme === "dark"', 'dark theme pinned');
   assert.equal(await evaluate('document.querySelectorAll("#module-list .module-card").length'), 4, 'four layer cards');
-  report.checks.push('Inline quick entry sits above the ranking table and the layer cards render in the output column.');
+  report.checks.push('The roster lists the seeded athletes and the layer cards render in the output column.');
 
-  // 1) 快速录入：号码 + 成绩，一步完成并自动进入下一位。
-  await type('#qe-athlete', '102');
-  await type('#qe-mark', '03:24.10');
-  await submit('#quick-entry');
-  await until('document.querySelector("#qe-status").classList.contains("is-ok") && document.querySelector("#rank-rows").textContent.includes("03:24.10")', 'quick entry saved');
-  assert.equal(await evaluate('document.activeElement.id'), 'qe-athlete', 'focus returns to athlete field');
-  assert.equal(await evaluate('document.querySelector("#qe-mark").value'), '', 'mark field cleared');
-  report.checks.push('Quick entry saves a time by bib number, clears the mark and returns focus for the next athlete.');
+  // 1) 冠军流程：点冠军 → 行下展开成绩栏（不上屏）→ 推送成绩 → 点显示上屏。
+  await click('[data-action="champion"]');
+  await until('document.querySelector("#champion-mark") !== null && document.querySelector(\'[data-action="champion"]\')?.getAttribute("aria-pressed") === "true"', 'champion pane opened');
+  assert.equal(await evaluate('document.querySelector(\'[data-action="module-toggle"][data-key="results"]\').getAttribute("aria-pressed")'), 'false', 'champion click does not go on air');
+  await screenshot('control-champion-pane.png');
+  await type('#champion-mark', '2:05.00');
+  await click('[data-action="champion-push"]');
+  await until('document.querySelector(\'[data-action="champion-show"]\') !== null', 'show button appears after push');
+  await click('[data-action="champion-show"]');
+  await until('document.querySelector("#preview").contentDocument?.querySelector(".winner-name")?.textContent.includes("林浩宇")', 'champion card shows the athlete');
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".winner-time")?.textContent'), '02:05.00');
+  assert.equal(await evaluate('document.querySelector(\'[data-action="module-toggle"][data-key="results"]\').getAttribute("aria-pressed")'), 'true', 'champion layer on air after show');
+  assert.equal(await evaluate('document.querySelector("#layer-count").textContent'), '上屏 3 / 4');
+  report.checks.push('Champion flow: pick the athlete, push the score in the inline pane, then show the champion card.');
 
-  // 2) 行内编辑器：不弹窗即可改成绩。
-  await click('[data-action="result-edit"]');
-  await until('document.querySelector(".rank-editor .re-input") !== null', 'inline editor opened');
-  await type('.rank-editor .re-input', '03:22.00');
-  await submit('.rank-editor');
-  await until('document.querySelector("#rank-rows").textContent.includes("03:22.00") && document.querySelector(".rank-editor") === null', 'inline editor saved');
-  report.checks.push('Mark editing happens inline in the ranking row, with no dialog.');
-  await screenshot('control-desktop.png');
-
-  // 3) 切换男女组：除左上角 Logo 外的图层自动隐藏。
-  await click('[data-action="division"][data-key="men"]');
-  await until('document.querySelector("#layer-count").textContent.includes("上屏 1 / 4")', 'division switch hides layers');
-  await pause(500);
-  assert.equal(await evaluate('[...document.querySelector("#preview").contentDocument.querySelectorAll(".layer")].filter(node => !node.hidden).map(node => node.dataset.module).join()'), 'brand');
-  assert.equal(await evaluate('document.querySelector(\'[data-action="module-toggle"][data-key="brand"]\').getAttribute("aria-pressed")'), 'true');
-  report.checks.push('Switching to the other division hides every layer except the corner logo.');
-  await click('[data-action="division"][data-key="women"]');
-  await until('document.querySelector("#rank-rows").textContent.includes("林浩宇")', 'back to the seeded race');
-
-  // 4) 图层开关：逐个上屏再下屏。
+  // 2) 图层开关：起跑介绍上屏会替换冠军卡，下屏后回到 Logo。
   await click('[data-action="module-toggle"][data-key="lineup"]');
   await until('document.querySelector("#preview").contentDocument?.querySelector(".intro-name")?.textContent.length > 0', 'intro on air');
+  assert.ok((await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".intro-team")?.textContent'))?.includes('1班'), 'intro shows the class under the title');
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".intro-bib")'), null, 'bib removed from the intro');
+  await screenshot('control-intro.png');
   await click('[data-action="module-toggle"][data-key="lineup"]');
-  await until('document.querySelector("#preview").contentDocument?.querySelectorAll(".layer:not([hidden])").length === 2', 'intro off air');
+  await until('document.querySelector("#preview").contentDocument?.querySelectorAll(".layer:not([hidden])").length === 1', 'intro off air');
   report.checks.push('Layer toggles put layers on air and take them off from the output column.');
 
+  // 3) 布局设置即调即生效：改 X 后监看画面立即移动，无需应用按钮。
+  await click('[data-action="module-select"][data-key="event"]');
+  await until('document.querySelector("#layout-form") !== null', 'layout inspector rendered');
+  await type('#layout-form [name="x"]', '300');
+  await until('document.querySelector("#preview").contentDocument?.querySelector(".layer--event")?.style.left === "300px"', 'layout auto applied');
+  report.checks.push('Layout changes apply immediately without an apply button.');
+
+  await screenshot('control-desktop.png');
+
+  // 4) 行内添加选手：表单只有姓名、班级、道次。
+  await click('[data-action="athlete-add"]');
+  await until('document.querySelector("#roster-form") !== null', 'inline athlete form');
+  assert.equal(await evaluate('document.querySelector("#roster-form [name=bib]")'), null, 'bib field removed from the form');
+  assert.ok((await evaluate('document.querySelector("#roster-rows thead").textContent')).includes('姓名 / 班级'));
+  await type('#roster-form [name=name]', '测试选手');
+  await submit('#roster-form');
+  await until('document.querySelector("#roster-rows").textContent.includes("测试选手")', 'athlete added inline');
+  report.checks.push('Adding an athlete happens inline with just name, class and lane.');
+  await screenshot('control-roster.png');
+
   // 5) 尺寸自适应。
+  await click('[data-action="workspace"][data-key="work"]');
   await viewport(1366, 768);
   await screenshot('control-laptop.png');
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
-  assert.equal(await evaluate('(() => { const box = document.querySelector(".save-status").getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight; })()'), true);
-  report.checks.push('1366x768 keeps the save status on screen without horizontal scroll.');
+  report.checks.push('1366x768 keeps the workspace on screen without horizontal scroll.');
   await viewport(1100, 800);
   await screenshot('control-tablet.png');
   assert.equal(await evaluate('getComputedStyle(document.querySelector(".mobile-nav")).display'), 'grid');
@@ -193,7 +200,6 @@ try {
   await screenshot('control-layout.png');
 
   // 7) 深浅色切换。
-  await viewport(1920, 1080);
   await click('[data-theme-option="light"]');
   await until('document.documentElement.dataset.theme === "light"', 'light theme applied');
   assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(238, 240, 243)');
@@ -202,21 +208,6 @@ try {
   await until('document.documentElement.dataset.theme === "dark"', 'dark theme applied');
   assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(13, 14, 16)');
   report.checks.push('Theme switch flips between light and dark and persists the choice.');
-
-  // 8) 赛程与名单视图。
-  await click('#open-schedule');
-  await until('document.querySelector("#school-schedule").hidden === false && document.querySelectorAll(".schedule-row").length > 0', 'schedule view');
-  await screenshot('control-schedule.png');
-  await click('#open-roster');
-  await until('document.querySelector("#competitors").hidden === false', 'roster view');
-  await click('[data-action="athlete-add"]');
-  await until('document.querySelector("#roster-form") !== null', 'inline athlete form');
-  await type('#roster-form [name=name]', '\u5468\u5b50\u5b89');
-  await type('#roster-form [name=bib]', '0110');
-  await submit('#roster-form');
-  await until('document.querySelector("#roster-summary").textContent.includes("9 位")', 'athlete added inline');
-  report.checks.push('Adding an athlete happens inline in the roster pane.');
-  await screenshot('control-roster.png');
 
   assert.deepEqual(errors, [], 'no uncaught browser exceptions');
   report.checks.push('No uncaught browser exceptions.');

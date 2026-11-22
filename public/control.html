@@ -24,14 +24,11 @@
         <button type="button" data-theme-option="light" title="浅色" aria-label="浅色主题" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
         <button type="button" data-theme-option="dark" title="深色" aria-label="深色主题" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
       </div>
-      <a class="chip" id="open-output" target="_blank" rel="noopener" aria-label="打开透明输出" title="打开 OBS 透明输出"><span>打开输出</span></a>
-      <button id="copy-output" class="chip" type="button" data-action="copy" aria-label="复制 OBS 地址" title="复制 OBS 地址"><span>复制地址</span></button>
-      <button id="open-meet" class="chip" type="button" data-action="meet" aria-label="直播信息" title="直播信息"><span>直播信息</span></button>
       <span id="connection" class="connection" role="status">正在连接</span>
     </div>
   </header>
   <nav class="mobile-nav" aria-label="工作区">
-    <button type="button" data-action="workspace" data-key="work" aria-controls="work-panel" aria-pressed="true">赛事工作台</button>
+    <button type="button" data-action="workspace" data-key="work" aria-controls="work-panel" aria-pressed="true">选手名单</button>
     <button type="button" data-action="workspace" data-key="output" aria-controls="preview-card output-panel" aria-pressed="false">监看与输出</button>
   </nav>
   <main class="app-shell" data-workspace="work">
@@ -47,112 +44,29 @@
         </section>
         <div id="layout-inspector" class="layout-inspector"></div>
       </div>
-      <div class="output-foot">
-        <span id="save-status" class="save-status"></span>
-      </div>
     </aside>
-    <aside class="panel work-panel" id="work-panel" data-view="ranking" aria-label="赛事工作台">
+    <aside class="panel work-panel" id="work-panel" aria-label="选手名单">
       <div class="panel-head">
-        <h2>赛事工作台</h2>
-        <div class="panel-utility">
-          <button type="button" class="ghost-button" data-action="edit-event" id="edit-active" disabled title="编辑当前赛事"><span>编辑</span></button>
-          <button type="button" class="ghost-button" data-action="new-event" id="new-event" title="新建赛事"><span>新建</span></button>
-        </div>
+        <h2>选手名单</h2>
       </div>
-      <div class="event-bar">
-        <div id="event-divisions" class="segmented" role="group" aria-label="比赛组别"></div>
-        <div class="event-tools">
-          <span id="event-next"></span>
-        </div>
-        <div id="active-event-picker" class="event-picker"></div>
-      </div>
-      <div class="work-tabs" role="tablist" aria-label="赛事视图">
-        <button type="button" role="tab" data-action="work-view" data-key="schedule" id="open-schedule" aria-pressed="false" aria-controls="school-schedule">赛程</button>
-        <button type="button" role="tab" data-action="work-view" data-key="ranking" id="open-ranks" aria-pressed="true" aria-controls="ranking-panel">名次与成绩</button>
-        <button type="button" role="tab" data-action="work-view" data-key="roster" id="open-roster" aria-pressed="false" aria-controls="competitors">备赛名单</button>
-        <!-- 班级积分先不用
-        <button type="button" data-action="work-view" data-key="points" id="open-points" aria-pressed="false" aria-controls="school-points">班级积分</button>
-        -->
-      </div>
-      <section id="school-schedule" aria-label="校运会赛程" hidden>
-        <div class="work-toolbar meet-toolbar">
-          <h2>校运会赛程</h2>
-          <div class="work-actions">
-            <select id="schedule-grade" aria-label="筛选年级"><option value="">全年级</option><option value="g1">高一</option><option value="g2">高二</option><option value="staff">教职工</option></select>
-            <input id="schedule-search" type="search" autocomplete="off" aria-label="搜索赛程" placeholder="项目或组别">
-          </div>
-        </div>
-        <div id="schedule-list" class="meet-table"></div>
-        <div class="work-footer"><span id="schedule-summary"></span><div class="pager" id="schedule-pager"></div></div>
-      </section>
-      <section class="ranking-panel" id="ranking-panel" aria-labelledby="ranking-title">
-        <div class="work-toolbar">
-          <div class="ranking-heading"><h2 id="ranking-title">名次与成绩</h2><span id="rank-mode" class="tag"></span></div>
-          <div class="work-actions">
-            <input id="rank-search" type="search" placeholder="姓名或号码" aria-label="搜索选手" autocomplete="off">
-          </div>
-        </div>
-        <form id="quick-entry" class="quick-entry" autocomplete="off" aria-label="快速录入成绩">
-          <label class="qe-field"><span>号码 / 姓名</span><input id="qe-athlete" list="qe-options" placeholder="0103 或 姓名" autocomplete="off" spellcheck="false"></label>
-          <datalist id="qe-options"></datalist>
-          <label class="qe-field qe-mark"><span id="qe-mark-label">成绩</span><input id="qe-mark" placeholder="03:21.52" autocomplete="off" inputmode="decimal" spellcheck="false"></label>
-          <button type="submit" class="button primary qe-submit" id="qe-save">录入</button>
-          <p id="qe-status" class="qe-status" aria-live="polite"></p>
-        </form>
-        <div id="school-race-actions" class="race-actions"></div>
-        <p id="rank-unavailable" class="empty-table" hidden></p>
-        <div class="rank-table" role="table" aria-label="选手与名次">
-          <div class="rank-head" role="row"><span aria-hidden="true"></span><span role="columnheader">名次</span><span role="columnheader">号码</span><span role="columnheader">姓名 / 单位</span><span role="columnheader">成绩</span><span role="columnheader">操作</span></div>
-          <div id="rank-rows" class="rank-rows" role="rowgroup"></div>
-        </div>
-        <div class="work-footer"><span id="rank-summary" aria-live="polite"></span><div id="rank-reset-control"></div><div class="pager" id="rank-pager" aria-label="选手分页"></div></div>
-      </section>
-      <section id="school-points" aria-label="班级积分" hidden>
-        <div class="work-toolbar meet-toolbar"><h2>班级积分榜</h2><div class="work-actions">
-          <select id="points-grade" aria-label="积分年级"><option value="g1">高一</option><option value="g2">高二</option></select>
-          <span id="points-tools"></span>
-        </div></div>
-        <div class="meet-table"><div class="points-row points-head"><span>名次</span><span>班级</span><span>总分</span><span>破纪录</span></div><div id="points-list"></div></div>
-        <div class="work-footer"><span id="points-summary"></span><div class="pager" id="points-pager"></div></div>
-      </section>
-      <section id="competitors" class="roster-pane" aria-label="备赛名单" hidden>
-        <div class="prep-toolbar"><div id="prep-event-picker"></div><div id="roster-tools" class="roster-tools"></div></div>
+      <section id="competitors" class="roster-pane" aria-label="选手名单">
+        <div class="prep-toolbar"><div id="roster-tools" class="roster-tools"></div></div>
         <div id="roster-editor" class="roster-editor"></div>
         <div id="roster-rows" class="roster-rows"></div>
-        <div class="work-footer"><span id="roster-summary"></span><div class="pager" id="roster-pager" aria-label="名单分页"></div></div>
+        <div class="work-footer"><div class="pager" id="roster-pager" aria-label="名单分页"></div></div>
       </section>
     </aside>
     <section class="panel preview-card" id="preview-card" aria-labelledby="preview-title">
       <div class="preview-toolbar">
         <div class="preview-live">
           <h2 id="preview-title" class="preview-label">画面监看</h2>
-          <span class="canvas-dimensions">1920 × 1080</span>
-          <span class="preview-zoom" id="preview-zoom">—</span>
-        </div>
-        <div class="preview-tools">
-          <div class="background-switch" role="group" aria-label="监看底图">
-            <button type="button" data-action="backdrop" data-key="dark" aria-label="深灰底图" title="深灰底图"><span class="bg-sample dark"></span></button>
-            <button type="button" data-action="backdrop" data-key="grid" aria-label="棋盘格底图" title="棋盘格底图" aria-pressed="true"><span class="bg-sample checker"></span></button>
-          </div>
-          <span class="tool-separator" aria-hidden="true"></span>
-          <label class="check-field"><input type="checkbox" id="monitor-guides">安全区</label>
         </div>
       </div>
       <div class="preview-stage" data-backdrop="grid">
         <div class="monitor-canvas"><iframe id="preview" title="OBS 画面预览"></iframe></div>
-        <p class="stage-hint">拖动画面中的图层可直接调整位置，松开即保存</p>
       </div>
     </section>
-    <div id="operations"></div>
-    <section class="panel focus-card" id="focus-card" aria-labelledby="focus-title">
-      <div class="focus-heading"><h2 id="focus-title">模块放大</h2><span class="focus-scale" id="focus-scale">自动适配</span></div>
-      <div class="focus-stage" data-backdrop="grid"><iframe id="focus-frame" title="模块放大预览" tabindex="-1"></iframe></div>
-    </section>
   </main>
-  <footer class="status-bar">
-    <span id="status-sync" class="status-sync">正在连接本机服务</span>
-    <span class="status-hint"><kbd>Enter</kbd> 保存录入 <kbd>Esc</kbd> 取消编辑 <span class="status-divider" aria-hidden="true"></span>录成绩时先填号码或姓名，回车即可下一位</span>
-  </footer>
   <div id="toast" class="toast" role="status" hidden></div>
   <dialog id="editor" aria-labelledby="editor-title">
     <form id="editor-form">

@@ -49,11 +49,6 @@ function laneLabel(lane) {
   return word ? `${word}道` : `${lane}道`;
 }
 
-function bibLabel(bib) {
-  const value = String(bib || '').trim();
-  return /^\d+$/.test(value) ? value.padStart(4, '0') : (value || '—');
-}
-
 function broadcastTitle(event) {
   const grade = event.schedule?.grade;
   const gradeLabel = grade && grade !== 'staff' ? GRADES[grade] : '';
@@ -73,10 +68,12 @@ function lineupGraphic(event) {
   const athlete = lineupRoster(event)[page];
   const name = athlete?.name || '等待参赛名单';
   const nameSize = Math.min(76, Math.max(28, Math.floor(300 / [...name].length)));
+  const lane = athlete?.lane ? laneLabel(athlete.lane) : '';
+  const team = athlete ? teamLabel(event, athlete) : '等待参赛名单';
   return `<div class="intro-board">
     <div class="intro-bar">
       <span class="intro-kicker">${h(broadcastTitle(event))}</span>
-      <div class="intro-main"><strong class="intro-bib">— ${h(bibLabel(athlete?.bib))}</strong><span class="intro-detail">${h(athlete ? [athlete.lane ? laneLabel(athlete.lane) : '', teamLabel(event, athlete)].filter(Boolean).join(' · ') : '等待参赛名单')}</span></div>
+      <div class="intro-main">${lane ? `<span class="intro-lane">${h(lane)}</span>` : ''}<span class="intro-team">${h(team)}</span></div>
     </div>
     <div class="intro-stub"><strong class="intro-name" style="--name-size: ${nameSize}px">${h(name)}</strong></div>
   </div>`;

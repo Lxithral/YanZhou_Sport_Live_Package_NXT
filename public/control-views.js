@@ -1,44 +1,25 @@
 import { escapeHtml as h } from './client.js';
-import { MODULES, DIVISIONS, GRADES, MOTIONS, RESULT_STATUS, applicable, eventTitle, formatTime, formatMark, moduleBounds, modulePosition, moduleScaleLimit, lineupRoster, roster, paginatedCount, jumpHeight, resultText, standings, relayRegistration } from './sport.js';
-import { compareSchedule } from './meet-program.js';
+import { MODULES, MOTIONS, applicable, eventTitle, formatTime, formatMark, moduleBounds, modulePosition, moduleScaleLimit, lineupRoster, roster, paginatedCount, resultText, standings } from './sport.js';
 
 const PATHS = {
   plus: 'M12 5v14M5 12h14',
-  link: 'M9 15l6-6M8 13H5.5A3.5 3.5 0 1 1 9 9.5M16 11h2.5A3.5 3.5 0 1 0 15 14.5',
   external: 'M14 4h6v6M20 4l-9 9M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4',
   image: 'M4 5h16v14H4zM4 15l4.5-4.5L13 15l3-3 4 4M14.5 9.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z',
   list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
-  timer: 'M12 8v5l3 2M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17zM9 1.5h6',
-  score: 'M4 19V5h16v14zM8 15v-4M12 15V7M16 15v-6',
   people: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM2.5 20a6.5 6.5 0 0 1 13 0M17 5.5a3 3 0 0 1 0 5.8M18 20a5.5 5.5 0 0 0-2.5-4.6',
   chart: 'M4 20h16M7 20v-6M12 20V8M17 20v-9',
-  person: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 21a7 7 0 0 1 14 0',
-  notice: 'M4 10v4h4l6 4V6L8 10zM18 9a4 4 0 0 1 0 6',
-  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
-  'eye-off': 'M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.7M6.1 6.6A16.6 16.6 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 3.6-.7',
   right: 'M9 6l6 6-6 6',
   left: 'M15 6l-6 6 6 6',
-  screen: 'M3 5h18v11H3zM9 20h6M12 16v4',
-  layout: 'M4 4h16v16H4zM4 10h16M10 10v10',
   info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v5M12 8h.01',
-  start: 'M7 4l13 8-13 8z',
-  pause: 'M8 5v14M16 5v14',
-  reset: 'M4 10a8 8 0 1 1 2.3 6.7M3 4v6h6',
-  stop: 'M6 6h12v12H6z',
   edit: 'M13 5l6 6-9 9H4v-6zM12 6l6 6',
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6',
-  upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',
-  download: 'M12 4v12M7 11l5 5 5-5M4 20h16',
   close: 'M6 6l12 12M18 6L6 18',
-  flag: 'M5 21V4M5 4h11l-1.5 4L16 12H5',
-  check: 'M4 12.5l5 5L20 6.5',
-  grip: 'M9 5h.01M9 12h.01M9 19h.01M15 5h.01M15 12h.01M15 19h.01',
-  copy: 'M9 9h10v10H9zM5 15V5h10',
+  trophy: 'M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4zM7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3',
   down: 'M6 9l6 6 6-6',
 };
 
 export function icon(key) {
-  return `<svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${PATHS[key] ?? PATHS.flag}"/></svg>`;
+  return `<svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${PATHS[key] ?? PATHS.trophy}"/></svg>`;
 }
 
 export function button(label, { action, key, value, glyph, variant = '', small = false, iconOnly = false, disabled = false, pressed, accessible } = {}) {
@@ -54,123 +35,85 @@ export function button(label, { action, key, value, glyph, variant = '', small =
   return `<button ${attrs.join(' ')}>${body}</button>`;
 }
 
-export function currentEventPicker(events, selected) {
-  const id = typeof selected === 'string' ? selected : selected?.id;
-  const has = events.some((event) => event.id === id);
-  return `<label class="current-picker"><span>当前赛事</span><select id="active-event" aria-label="当前赛事">${has ? '' : '<option value="">未选择赛事</option>'}${options(eventOptions(events), id)}</select></label>`;
-}
-
-function eventOptions(events) {
-  const scheduled = events.filter((event) => event.schedule).toSorted(compareSchedule);
-  const others = events.filter((event) => !event.schedule);
-  const list = [];
-  if (scheduled.length) {
-    list.push({ label: '本届校运会', children: scheduled });
-  }
-  if (others.length) {
-    list.push({ label: '其他赛事', children: others });
-  }
-  return list.flatMap(({ label, children }) => [
-    { label, disabled: true, group: true },
-    ...children.map((event) => ({ value: event.id, label: eventTitle(event) })),
-  ]);
-}
-
-export function divisionPicker(events, selected) {
-  const counts = new Map();
-  for (const event of events) counts.set(event.division, (counts.get(event.division) ?? 0) + 1);
-  return Object.entries(DIVISIONS)
-    .filter(([key]) => key !== 'open' || counts.get(key))
-    .map(([key, label]) => `<button type="button" data-action="division" data-key="${key}" aria-pressed="${selected === key}">${h(label)}${counts.get(key) ? ` <span class="badge">${counts.get(key)}</span>` : ''}</button>`)
-    .join('');
-}
-
-export function rosterPicker(events, activeId, selected) {
-  const rows = events.filter((event) => event.kind !== 'match').toSorted(compareSchedule);
-  const first = !selected ? '跟随当前赛事' : '';
-  return `<label class="prep-label"><span>名单赛事</span><select id="prep-event" aria-label="名单赛事"><option value="">${first || '跟随当前赛事'}</option>${rows.map((event) => `<option value="${event.id}" ${event.id === selected ? 'selected' : ''}>${h(eventTitle(event))}</option>`).join('')}</select></label>`;
-}
-
 export function pager(action, page, total, label = '翻页') {
   if (total <= 1) return '';
   return `<button type="button" class="button compact" data-action="${action}" data-value="${page - 1}" aria-label="上一页" ${page <= 0 ? 'disabled' : ''}>${icon('left')}</button><span class="pager-position">${page + 1} / ${total}</span><button type="button" class="button compact" data-action="${action}" data-value="${page + 1}" aria-label="下一页" ${page >= total - 1 ? 'disabled' : ''}>${icon('right')}</button>`;
 }
 
-export function operations(event) {
-  if (!event) return `<div class="operations-panel no-event"><span class="hint">${h('先选择一场赛事，这里会出现记分和操作按钮。')}</span></div>`;
-  if (event.kind === 'track') return '';
-  if (event.kind === 'ranking') return `<div class="operations-panel"><span class="hint">团体项目，赛制待定。</span></div>`;
-  if (event.kind === 'match') {
-    return `<div class="operations-panel operations-panel--match">${ballPanel(event)}</div>`;
-  }
-  const best = Math.max(0, ...event.competitors.flatMap((athlete) => athlete.attempts ?? []).filter(Number.isInteger));
-  const jumps = event.schedule?.project === 'high-jump';
-  return `<div class="operations-panel operations-panel--field">
-    <div class="field-summary">
-      <span>最佳成绩 <b>${best ? h(formatMark(best)) : '—'}</b></span>
-      ${jumps ? `<span>横杆 <b>${jumpHeight(event)}</b><small> cm</small></span><button type="button" class="button capture" data-action="jump-raise">升杆</button>` : `<span>试次上限 <b>${event.competitors.reduce((max, athlete) => Math.max(max, (athlete.attempts ?? []).length), 0)}</b><small> / 12</small></span>`}
-      ${jumps ? '' : `<span class="hint">在名次表点「录入」逐次记录试次</span>`}
-    </div>
-  </div>`;
-}
-
-function ballPanel(event) {
-  const match = event.match ?? { home: 0, away: 0, period: 1 };
-  const half = (match.period ?? 1) === 1;
-  const steps = half ? [1] : [1, 2, 3];
-  const team = (side, label, score) => `<div class="ball-team"><div><strong class="tabular">${score ?? 0}</strong><span>${h(label)}</span></div><div class="score-actions">${steps.map((step) => button(`+${step}`, { action: 'score', key: side, value: step, small: true })).join('')}${button('−1', { action: 'score', key: side, value: -1, small: true })}</div></div>`;
-  const periodLabel = (match.period ?? 1) === 1 ? '上半场' : match.period === 2 ? '下半场' : `加时 ${match.period - 2}`;
-  return `<div class="ball-panel"><div class="ball-grid">${team('home', event.home ?? '主队', match.home)}${team('away', event.away ?? '客队', match.away)}</div><div class="period-actions"><span class="period-label">${h(periodLabel)}</span>${button('−1', { action: 'period', value: -1, small: true })}${button('+1', { action: 'period', value: 1, small: true })}</div></div>`;
-}
-
 export function rosterTools(event) {
   if (!event) return '';
-  if (event.kind === 'match') return button('比赛比分', { action: 'meet', glyph: 'score', small: true });
   return button('添加选手', { action: 'athlete-add', glyph: 'plus', small: true });
 }
 
-export function competitorPanel(event, { start, limit, onAir }) {
+const SPECIAL = ['DNS', 'DNF', 'DQ', 'NM'];
+
+// 表单不再展示号码、分组、成绩、状态，编辑时要原样带上，避免服务端把这些数据清空
+export function athleteFields(event, athlete, overrides = {}) {
+  const fields = {
+    name: athlete?.name ?? '', team: athlete?.team ?? '', lane: athlete?.lane ?? '',
+    bib: athlete?.bib ?? '',
+  };
+  if (event.kind === 'track' && event.schedule) fields.heat = athlete?.heat ?? 1;
+  if (event.schedule?.project === 'shuttle-50') {
+    fields.boys = athlete?.boys ?? '';
+    fields.girls = athlete?.girls ?? '';
+  }
+  if (event.kind === 'field') {
+    fields.attempts = attemptsValue(athlete ?? {});
+    if (event.schedule?.project === 'high-jump') fields.jumps = jumpsValue(athlete ?? {});
+  } else if (athlete?.time != null) fields.result = formatTime(athlete.time, true);
+  if (athlete && SPECIAL.includes(athlete.status)) fields.status = athlete.status;
+  return { ...fields, ...overrides };
+}
+
+export function competitorPanel(event, { start, limit, pane }) {
   const rows = roster(event).slice(start, start + limit);
-  if (!rows.length) return `<p class="empty-table">名单还是空的：点「添加选手」填一行，号码和成绩都能直接贴上。</p>`;
-  const head = `<thead><tr><th class="lane-col">${h(event.kind === 'track' ? '道次' : '序')}</th><th class="bib-col">号码</th><th>姓名 / 单位</th><th class="result-col">成绩</th><th class="action-col">操作</th></tr></thead>`;
+  if (!rows.length) return `<p class="empty-table">名单还是空的：点「添加选手」填一行，姓名和班级即可。</p>`;
+  const championId = standings(event).find((row) => row.rank === 1)?.athlete.id;
+  const head = `<thead><tr><th>姓名 / 班级</th><th class="result-col">成绩</th><th class="action-col">操作</th></tr></thead>`;
   const body = rows.map((athlete) => {
-    const registration = relayRegistration(athlete);
-    const detail = [athlete.team, athlete.heat && event.kind === 'track' ? `第 ${athlete.heat} 组` : '', registration !== '待核验' ? registration : ''].filter(Boolean).join(' · ');
+    const detail = athlete.team ?? '';
     const mark = event.kind === 'field' && event.schedule?.project !== 'high-jump' && athlete.attempts?.length
       ? athlete.attempts.map((value) => (Number.isInteger(value) ? formatMark(value) : value)).join(' ')
       : resultText(athlete, event);
-    return `<tr data-athlete="${athlete.id}">
-      <td class="table-lane tabular">${athlete.lane ?? '—'}</td>
-      <td class="table-bib tabular">${h(athlete.bib || '—')}</td>
+    const isChampion = athlete.id === championId;
+    const row = `<tr data-athlete="${athlete.id}"${isChampion ? ' class="champion-row"' : ''}>
       <td class="roster-name"><span>${h(athlete.name)}</span>${detail ? `<small>${h(detail)}</small>` : ''}</td>
       <td class="table-result tabular">${h(mark)}</td>
-      <td class="row-actions">${button('编辑', { action: 'athlete-edit', key: athlete.id, glyph: 'edit', small: true, iconOnly: true, accessible: `编辑 ${athlete.name}` })}</td>
+      <td class="row-actions">${button('冠军', { action: 'champion', key: athlete.id, glyph: 'trophy', small: true, variant: isChampion ? 'capture' : '', pressed: isChampion, accessible: `${isChampion ? '当前冠军' : '设为冠军'} · ${athlete.name}` })}${button('编辑', { action: 'athlete-edit', key: athlete.id, glyph: 'edit', small: true, iconOnly: true, accessible: `编辑 ${athlete.name}` })}</td>
     </tr>`;
+    return row + (pane && pane.id === athlete.id ? championPaneRow(event, athlete, pane) : '');
   }).join('');
   return `<table>${head}<tbody>${body}</tbody></table>`;
 }
 
-export function athleteForm(event, athlete, open) {
+function championPaneRow(event, athlete, pane) {
+  const jumps = event.kind === 'field' && event.schedule?.project === 'high-jump';
+  const scoreField = !jumps && (event.kind === 'track' || event.kind === 'field');
+  const current = event.kind === 'track' && athlete.time != null ? formatTime(athlete.time, true) : '';
+  return `<tr class="champion-pane"><td colspan="3">
+    <div class="champion-editor">
+      <span class="champion-editor-name">冠军 · ${h(athlete.name)}</span>
+      ${scoreField ? `<input id="champion-mark" placeholder="${event.kind === 'field' ? '试次，如 5.35 或 X' : '成绩，如 2:05.00'}" value="${h(current)}" autocomplete="off" spellcheck="false" inputmode="${event.kind === 'field' ? 'decimal' : 'text'}" aria-label="冠军成绩">` : ''}
+      <div class="champion-editor-actions">
+        ${scoreField ? button('推送', { action: 'champion-push', variant: 'primary' }) : ''}
+        ${pane.pushed ? button('显示', { action: 'champion-show', variant: 'capture' }) : ''}
+        ${button('', { action: 'champion-close', glyph: 'close', iconOnly: true, accessible: '收起成绩栏' })}
+      </div>
+    </div>
+  </td></tr>`;
+}
+
+export function athleteForm(event, athlete) {
   const editing = Boolean(athlete);
-  const profile = athlete ?? { lane: '', bib: '', name: '', team: '', result: '', attempts: '', jumps: '', status: '', heat: '' };
+  const profile = athlete ?? { lane: '', name: '', team: '' };
   const track = event.kind === 'track';
-  const jumps = event.schedule?.project === 'high-jump';
-  const shuttle = event.schedule?.project === 'shuttle-50';
-  const statuses = Object.entries(RESULT_STATUS).filter(([key]) => key !== 'ok');
   return `<form id="roster-form" data-event="${event.id}" data-athlete="${athlete?.id ?? ''}" novalidate>
-    <div class="re-head"><strong>${editing ? `编辑 ${h(athlete.name)}` : '添加选手'}</strong><span class="hint">${track ? '径赛填成绩即可自动排名' : jumps ? '跳高按横杆逐次记录' : '田赛填试次，可用 X 表示犯规'}</span></div>
+    <div class="re-head"><strong>${editing ? `编辑 ${h(athlete.name)}` : '添加选手'}</strong></div>
     <div class="field-grid">
       <label class="field field-wide"><span>姓名 / 队名</span><input name="name" maxlength="30" value="${h(profile.name ?? '')}" placeholder="如 陆晨曦" required></label>
-      <label class="field"><span>号码</span><input name="bib" maxlength="14" value="${h(profile.bib ?? '')}" placeholder="0103"></label>
       <label class="field"><span>单位 / 班级</span><input name="team" maxlength="35" value="${h(profile.team ?? '')}" placeholder="高一3班"></label>
       <label class="field"><span>${track ? '道次' : '出场序'}</span><input name="lane" type="number" min="1" max="999" value="${h(profile.lane ?? '')}" placeholder="—"></label>
-      ${track && event.schedule ? `<label class="field"><span>分组</span><input name="heat" type="number" min="1" max="32" value="${h(profile.heat ?? 1)}"></label>` : ''}
-      ${shuttle ? `<label class="field"><span>男生人数</span><input name="boys" type="number" min="0" max="99" value="${h(profile.boys ?? '')}"></label><label class="field"><span>女生人数</span><input name="girls" type="number" min="0" max="99" value="${h(profile.girls ?? '')}"></label>` : ''}
-      ${jumps ? '' : track
-        ? `<label class="field field-wide"><span>成绩</span><input name="result" maxlength="24" value="${h(profile.time != null ? formatTime(profile.time, true) : '')}" placeholder="03:21.52"></label>`
-        : `<label class="field field-wide"><span>试次</span><input name="attempts" maxlength="128" value="${h(attemptsValue(profile))}" placeholder="5.20 | 5.35 | X"></label>`}
-      ${jumps ? `<label class="field field-wide"><span>跳高记录</span><input name="jumps" maxlength="1400" value="${h(jumpsValue(profile))}" placeholder="95:O|100:X|105:O"></label>` : ''}
-      <label class="field"><span>状态</span><select name="status"><option value="">按成绩自动</option>${statuses.map(([key, label]) => `<option value="${key}" ${profile.status === key ? 'selected' : ''}>${h(label)}</option>`).join('')}</select></label>
     </div>
     <div class="re-actions">
       ${editing ? button('删除选手', { action: 'athlete-delete', key: athlete.id, variant: 'danger subtle', small: true }) : ''}
@@ -220,9 +163,8 @@ export function moduleList(state, event, selected) {
 function moduleControls(state, event, key, page, pages) {
   if (key === 'lineup' && event) {
     const rows = lineupRoster(event);
-    const current = rows[page] ?? null;
     const next = rows[page + 1] ?? null;
-    if (!rows.length) return `<div class="module-foot intro-controls"><span class="hint">名单为空，先去「备赛名单」添加选手</span></div>`;
+    if (!rows.length) return `<div class="module-foot intro-controls"><span class="hint">名单为空，先添加选手</span></div>`;
     return `<div class="module-foot intro-controls">
       <select data-lineup-page="${page}" data-event-id="${event.id}" aria-label="选择起跑介绍选手">${rows.map((athlete, index) => `<option value="${index}" ${index === page ? 'selected' : ''}>${index + 1}. ${h(athlete.name)}${athlete.bib ? ` · ${h(athlete.bib)}` : ''}</option>`).join('')}</select>
       <div class="intro-navigation">
@@ -250,44 +192,9 @@ function moduleSummary(state, event, key) {
   }
   if (key === 'results') {
     const winner = standings(event).find((row) => row.rank === 1);
-    return winner ? `第一名 ${winner.athlete.name} · ${resultText(winner.athlete, event)}` : '等待第一名';
+    return winner ? `冠军 ${winner.athlete.name} · ${resultText(winner.athlete, event)}` : '等待冠军';
   }
   return '';
-}
-
-export function athleteFields(athlete) {
-  const fields = { lane: athlete.lane ?? '', bib: athlete.bib ?? '', name: athlete.name, team: athlete.team ?? '' };
-  if (athlete.heat != null) fields.heat = athlete.heat;
-  if (athlete.boys != null) fields.boys = athlete.boys;
-  if (athlete.girls != null) fields.girls = athlete.girls;
-  return fields;
-}
-
-export function options(entries, selected) {
-  const list = Array.isArray(entries) ? entries : Object.entries(entries ?? {});
-  let html = '';
-  for (const entry of list) {
-    if (Array.isArray(entry)) {
-      const [value, label] = entry;
-      html += `<option value="${h(String(value ?? ''))}" ${String(value ?? '') === selected ? 'selected' : ''}>${h(String(label ?? ''))}</option>`;
-      continue;
-    }
-    if (entry.group) continue;
-    if (entry.children) {
-      html += `<optgroup label="${h(entry.label)}">${entry.children.map((child) => `<option value="${h(child.value ?? child.id)}" ${(child.value ?? child.id) === selected ? 'selected' : ''}>${h(child.label ?? child.name)}</option>`).join('')}</optgroup>`;
-      continue;
-    }
-    html += `<option value="${h(entry.value ?? '')}" ${(entry.value ?? '') === selected ? 'selected' : ''} ${entry.disabled ? 'disabled' : ''}>${h(entry.label)}</option>`;
-  }
-  return html;
-}
-
-export function input(label, name, value, attrs = '') {
-  return `<label class="field"><span>${h(label)}</span><input name="${name}" value="${h(value ?? '')}" ${attrs}></label>`;
-}
-
-export function select(label, name, values, selected) {
-  return `<label class="field"><span>${h(label)}</span><select name="${name}">${values.map(([value, text]) => `<option value="${h(value)}" ${value === selected ? 'selected' : ''}>${h(text)}</option>`).join('')}</select></label>`;
 }
 
 export function inspector({ state, key, collapsed = new Set() }) {
@@ -313,9 +220,6 @@ export function inspector({ state, key, collapsed = new Set() }) {
         ${range('x', '水平 X', position.x, 0, bounds.x, 'px')}
         ${range('y', '垂直 Y', position.y, 0, bounds.y, 'px')}
         <div class="field field-wide">${range('scale', '整体大小', layout.scale, 35, limit, '%')}</div>
-      </div>
-      <div class="anchor-buttons">
-        ${[['tl', '左上'], ['tr', '右上'], ['bl', '左下'], ['br', '右下']].map(([corner, label]) => button(label, { action: 'anchor', value: corner, small: true })).join('')}
       </div>`, !collapsed.has('position'))}
     ${section('appearance', '02', '外观', `
       <div class="field-grid">
@@ -327,10 +231,6 @@ export function inspector({ state, key, collapsed = new Set() }) {
         <label class="field"><span>退场动画</span><select name="exit">${Object.entries(MOTIONS).map(([value, label]) => `<option value="${value}" ${layout.exit === value ? 'selected' : ''}>${h(label)}</option>`).join('')}</select></label>
         <div class="field field-wide">${range('duration', '动画时长', layout.duration, 80, 2000, 'ms')}</div>
       </div>`, !collapsed.has('motion'))}
-    <div class="layout-buttons">
-      <button type="button" class="ghost-button" data-action="layout-reset">恢复默认</button>
-      <button type="submit" class="button primary">应用设置</button>
-    </div>
-    <p class="form-note">四角对齐会贴到安全区，也可以直接在监看里拖动已上屏的图层。</p>
+    <p class="form-note">所有设置调整后立即生效，也可以直接在监看里拖动已上屏的图层。</p>
   </form>`;
 }

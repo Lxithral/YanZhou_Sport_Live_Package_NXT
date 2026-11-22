@@ -16,7 +16,7 @@ const SPECIAL = ['DNS', 'DNF', 'DQ', 'NM'];
 const MAX_EVENTS = 160;
 const MAX_ATTEMPTS = 12;
 const MAX_HEATS = 32;
-const RESULT_COMMANDS = new Set(['athlete:save', 'athlete:delete', 'athlete:attempt', 'rank:move', 'rank:remove', 'rank:reset', 'jump:mark', 'jump:undo']);
+const RESULT_COMMANDS = new Set(['athlete:save', 'athlete:delete', 'athlete:attempt', 'rank:move', 'rank:remove', 'rank:reset', 'rank:champion', 'jump:mark', 'jump:undo']);
 
 function requireThat(condition, message) {
   if (!condition) throw new Error(message);
@@ -510,6 +510,11 @@ const commands = {
     pruneRanks(event);
   },
   'rank:move': moveRank,
+  'rank:champion'(state, { eventId, id }) {
+    const event = getRosterEvent(state, eventId);
+    requireThat(canRank(getAthlete(event, id)), '该选手的成绩状态不能排入名次。');
+    event.rankOrder = [id];
+  },
   'rank:remove'(state, { eventId, id }) {
     const event = getRosterEvent(state, eventId);
     getAthlete(event, id);
