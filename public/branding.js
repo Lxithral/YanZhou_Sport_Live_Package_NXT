@@ -38,14 +38,16 @@ export function showBrandCorner(mode, brandVisible, focusKey, corner, occupied) 
 }
 
 export function brandGraphic(mode, subtitle) {
-  const seal = '<img class="school-seal" src="/assets/yanzhou-seal.png" alt="中山市烟洲中学校徽">';
   if (mode === 'off') return '';
   if (mode === 'legacy') {
+    const seal = '<img class="school-seal" src="/assets/yanzhou-seal.png" alt="中山市烟洲中学校徽">';
     return `<div class="brand-ribbon">${seal}<div class="brand-copy">
       <img class="brand-wordmark" src="/assets/yanzhou-sport-wordmark.png" alt="YZBTVS SPORT" width="513" height="92">
       ${subtitle ? `<small>${escapeHtml(subtitle)}</small>` : ''}</div></div>`;
   }
-  return `<div class="branding-channel">${seal}<strong>YZBTVS <span>SPORT</span></strong></div>`;
+  return `<div class="branding-channel">
+    <img src="/assets/branding/yanzhou-channel-wordmark.png" alt="YZBTVS SPORT" width="1536" height="244">
+  </div>`;
 }
 
 const cornerMarkup = {

@@ -54,6 +54,9 @@ test('control and output stay in sync and a restart restores the race', async (t
   const brandingPreview = await fetch(`${base}/branding-preview.html`);
   assert.equal(brandingPreview.status, 200);
   assert.match(await brandingPreview.text(), /data-branding-preview/);
+  const channelWordmark = await fetch(`${base}/assets/branding/yanzhou-channel-wordmark.png`, { method: 'HEAD' });
+  assert.equal(channelWordmark.status, 200);
+  assert.equal(channelWordmark.headers.get('content-type'), 'image/png');
   const goldMark = await fetch(`${base}/assets/branding/yanzhou-zhou-gold-mark.png`, { method: 'HEAD' });
   assert.equal(goldMark.status, 200);
   assert.equal(goldMark.headers.get('content-type'), 'image/png');
