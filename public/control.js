@@ -26,6 +26,8 @@ let rosterEditing = null;
 let toastTimer;
 let saveTimer;
 let layoutKey = 'brand';
+// 布局面板默认只展开「位置」，外观与出场/退场收起，避免面板过长
+const collapsedSections = new Set(['appearance', 'motion']);
 let layoutDirty = false;
 let layoutModel;
 let backdrop = 'grid';
@@ -143,7 +145,7 @@ function renderLayout() {
   if (!layoutDirty) {
     const model = JSON.stringify([layoutKey, state.modules[layoutKey], activeEvent(state)?.kind]);
     if (layoutModel !== model) {
-      layoutPane.innerHTML = inspector({ state, key: layoutKey });
+      layoutPane.innerHTML = inspector({ state, key: layoutKey, collapsed: collapsedSections });
       layoutModel = model;
     }
   }
@@ -601,6 +603,14 @@ layoutPane.addEventListener('input', (e) => {
   layoutDirty = true;
   if (e.target.name === 'scale' && e.target.form) updatePositionBounds(e.target.form);
 });
+
+layoutPane.addEventListener('toggle', (e) => {
+  const section = e.target.closest?.('[data-section]');
+  if (!section) return;
+  const id = section.dataset.section;
+  if (section.open) collapsedSections.delete(id);
+  else collapsedSections.add(id);
+}, true);
 
 layoutPane.addEventListener('submit', async (e) => {
   e.preventDefault();

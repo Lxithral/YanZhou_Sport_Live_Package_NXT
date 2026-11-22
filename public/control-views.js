@@ -290,7 +290,7 @@ export function select(label, name, values, selected) {
   return `<label class="field"><span>${h(label)}</span><select name="${name}">${values.map(([value, text]) => `<option value="${h(value)}" ${value === selected ? 'selected' : ''}>${h(text)}</option>`).join('')}</select></label>`;
 }
 
-export function inspector({ state, key }) {
+export function inspector({ state, key, collapsed = new Set() }) {
   const meta = MODULES[key];
   const layout = state.modules[key];
   const position = modulePosition(key, layout);
@@ -298,14 +298,17 @@ export function inspector({ state, key }) {
   const limit = moduleScaleLimit(key);
   const percent = (value, min, max) => `${Math.round(((value - min) / (max - min)) * 100)}%`;
   const range = (name, label, value, min, max, unit) => `<label class="field"><span>${label}</span><span class="slider-line"><input type="range" class="range-input" data-range="${name}" name="${name}" min="${min}" max="${max}" value="${value}" style="--range-fill:${percent(value, min, max)}" aria-label="${label}"><span class="number-unit"><input type="number" data-number="${name}" min="${min}" max="${max}" value="${value}" aria-label="${label}数值"><span>${unit}</span></span></span></label>`;
+  const section = (id, index, title, body, open) => `<details class="settings-section" data-section="${id}"${open ? ' open' : ''}>
+      <summary><h3><span>${index}</span>${title}</h3></summary>
+      <div class="section-body">${body}</div>
+    </details>`;
   return `<form id="layout-form" class="layout-form" novalidate>
     <div class="card-head"><h3>布局微调</h3><span class="tag">${h(meta.title)}</span></div>
     <div class="visibility-row${layout.visible ? ' on' : ''}">
       <span class="visibility-copy"><strong>${layout.visible ? '画面中' : '未上屏'}</strong><small>${layout.visible ? '点击可立即隐藏' : '点击后出现在输出画面'}</small></span>
       <button type="button" class="switch" data-action="module-toggle" data-key="${key}" aria-pressed="${layout.visible}" aria-label="${layout.visible ? '隐藏' : '显示'}${h(meta.title)}"><span></span></button>
     </div>
-    <section class="settings-section">
-      <h3><span>01</span>位置</h3>
+    ${section('position', '01', '位置', `
       <div class="field-grid">
         ${range('x', '水平 X', position.x, 0, bounds.x, 'px')}
         ${range('y', '垂直 Y', position.y, 0, bounds.y, 'px')}
@@ -313,17 +316,17 @@ export function inspector({ state, key }) {
       </div>
       <div class="anchor-buttons">
         ${[['tl', '左上'], ['tr', '右上'], ['bl', '左下'], ['br', '右下']].map(([corner, label]) => button(label, { action: 'anchor', value: corner, small: true })).join('')}
-      </div>
-    </section>
-    <section class="settings-section">
-      <h3><span>02</span>外观</h3>
+      </div>`, !collapsed.has('position'))}
+    ${section('appearance', '02', '外观', `
       <div class="field-grid">
         <div class="field field-wide">${range('opacity', '不透明度', layout.opacity, 0, 100, '%')}</div>
-        <div class="field field-wide">${range('duration', '动画时长', layout.duration, 80, 2000, 'ms')}</div>
+      </div>`, !collapsed.has('appearance'))}
+    ${section('motion', '03', '出场 / 退场', `
+      <div class="field-grid">
         <label class="field"><span>进场动画</span><select name="enter">${Object.entries(MOTIONS).map(([value, label]) => `<option value="${value}" ${layout.enter === value ? 'selected' : ''}>${h(label)}</option>`).join('')}</select></label>
         <label class="field"><span>退场动画</span><select name="exit">${Object.entries(MOTIONS).map(([value, label]) => `<option value="${value}" ${layout.exit === value ? 'selected' : ''}>${h(label)}</option>`).join('')}</select></label>
-      </div>
-    </section>
+        <div class="field field-wide">${range('duration', '动画时长', layout.duration, 80, 2000, 'ms')}</div>
+      </div>`, !collapsed.has('motion'))}
     <div class="layout-buttons">
       <button type="button" class="ghost-button" data-action="layout-reset">恢复默认</button>
       <button type="submit" class="button primary">应用设置</button>

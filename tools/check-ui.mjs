@@ -119,6 +119,9 @@ try {
   await until('document.querySelector("#connection")?.classList.contains("connection--online") && document.querySelector("#rank-rows")?.textContent.includes("林浩宇")', 'control connected');
 
   assert.equal(await evaluate('document.querySelector("#quick-entry").hidden'), false, 'quick entry is inline and visible');
+  // 无头浏览器默认报告浅色系统主题，先固定成深色，保证截图可复现
+  await click('[data-theme-option="dark"]');
+  await until('document.documentElement.dataset.theme === "dark"', 'dark theme pinned');
   assert.equal(await evaluate('document.querySelectorAll("#module-list .module-card").length'), 4, 'four layer cards');
   report.checks.push('Inline quick entry sits above the ranking table and the layer cards render in the output column.');
 
@@ -176,8 +179,31 @@ try {
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
   report.checks.push('390px stacks into one column and the workspace switch keeps both halves reachable.');
 
-  // 6) 赛程与名单视图。
+  // 6) 布局面板：外观与出场/退场默认折叠，展开后仍可编辑。
   await viewport(1920, 1080);
+  await click('[data-action="module-select"][data-key="event"]');
+  await pause(400);
+  assert.equal(await evaluate('document.querySelectorAll("#layout-form details.settings-section").length'), 3);
+  assert.equal(await evaluate('[...document.querySelectorAll("#layout-form details")].filter(d => d.open).length'), 1);
+  await evaluate('(() => { const node = document.querySelector("#layout-form details[data-section=appearance]"); node.open = true; return true; })()');
+  await pause(200);
+  assert.equal(await evaluate('[...document.querySelectorAll("#layout-form details")].filter(d => d.open).length'), 2);
+  report.checks.push('Layout panel groups position, appearance and motion into collapsible sections.');
+  await evaluate('document.querySelector("#layout-form").scrollIntoView({ block: "start" })');
+  await screenshot('control-layout.png');
+
+  // 7) 深浅色切换。
+  await viewport(1920, 1080);
+  await click('[data-theme-option="light"]');
+  await until('document.documentElement.dataset.theme === "light"', 'light theme applied');
+  assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(238, 240, 243)');
+  await screenshot('control-light.png');
+  await click('[data-theme-option="dark"]');
+  await until('document.documentElement.dataset.theme === "dark"', 'dark theme applied');
+  assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(13, 14, 16)');
+  report.checks.push('Theme switch flips between light and dark and persists the choice.');
+
+  // 8) 赛程与名单视图。
   await click('#open-schedule');
   await until('document.querySelector("#school-schedule").hidden === false && document.querySelectorAll(".schedule-row").length > 0', 'schedule view');
   await screenshot('control-schedule.png');
