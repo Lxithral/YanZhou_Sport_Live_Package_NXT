@@ -29,6 +29,24 @@
     <button type="button" data-action="workspace" data-key="output" aria-controls="preview-card output-panel" aria-pressed="false">监看与输出</button>
   </nav>
   <main class="app-shell" data-workspace="work">
+    <aside class="panel output-panel" id="properties-column" aria-label="画面输出">
+      <div class="panel-head">
+        <h2>画面输出</h2>
+        <span id="layer-count" class="badge" aria-label="上屏图层数量"></span>
+      </div>
+      <div class="output-scroll">
+        <div id="rank-controls" class="stage-actions"></div>
+        <section class="card layers-card" aria-labelledby="layers-title">
+          <div class="card-head"><h2 id="layers-title">上屏图层</h2><span class="hint">点选后在下方微调位置</span></div>
+          <div id="module-list" class="module-list"></div>
+        </section>
+        <div id="layout-inspector" class="layout-inspector"></div>
+      </div>
+      <div class="output-foot">
+        <div id="module-footer"></div>
+        <span id="save-status" class="save-status"></span>
+      </div>
+    </aside>
     <aside class="panel work-panel" id="work-panel" data-view="ranking" aria-label="赛事工作台">
       <div class="panel-head">
         <h2>赛事工作台</h2>
@@ -129,24 +147,6 @@
       <div class="focus-heading"><h2 id="focus-title">模块放大</h2><span class="focus-scale" id="focus-scale">自动适配</span></div>
       <div class="focus-stage" data-backdrop="grid"><iframe id="focus-frame" title="模块放大预览" tabindex="-1"></iframe></div>
     </section>
-    <aside class="panel output-panel" id="properties-column" aria-label="画面输出">
-      <div class="panel-head">
-        <h2>画面输出</h2>
-        <span id="layer-count" class="badge" aria-label="上屏图层数量"></span>
-      </div>
-      <div class="output-scroll">
-        <div id="rank-controls" class="stage-actions"></div>
-        <section class="card layers-card" aria-labelledby="layers-title">
-          <div class="card-head"><h2 id="layers-title">上屏图层</h2><span class="hint">点选后在下方微调位置</span></div>
-          <div id="module-list" class="module-list"></div>
-        </section>
-        <div id="layout-inspector" class="layout-inspector"></div>
-      </div>
-      <div class="output-foot">
-        <div id="module-footer"></div>
-        <span id="save-status" class="save-status"></span>
-      </div>
-    </aside>
   </main>
   <footer class="status-bar">
     <span id="status-sync" class="status-sync">正在连接本机服务</span>
