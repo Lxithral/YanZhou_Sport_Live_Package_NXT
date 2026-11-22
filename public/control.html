@@ -130,15 +130,10 @@
           <span class="preview-zoom" id="preview-zoom">—</span>
         </div>
         <div class="preview-tools">
-          <div class="background-switch" role="group" aria-label="监看底图">
-            <button type="button" data-action="backdrop" data-key="dark" aria-label="深灰底图" title="深灰底图"><span class="bg-sample dark"></span></button>
-            <button type="button" data-action="backdrop" data-key="grid" aria-label="棋盘格底图" title="棋盘格底图" aria-pressed="true"><span class="bg-sample checker"></span></button>
-          </div>
-          <span class="tool-separator" aria-hidden="true"></span>
           <label class="check-field"><input type="checkbox" id="monitor-guides">安全区</label>
         </div>
       </div>
-      <div class="preview-stage" data-backdrop="grid">
+      <div class="preview-stage">
         <div class="monitor-canvas"><iframe id="preview" title="OBS 画面预览"></iframe></div>
         <p class="stage-hint">拖动画面中的图层可直接调整位置，松开即保存</p>
       </div>
@@ -146,7 +141,7 @@
     <div id="operations"></div>
     <section class="panel focus-card" id="focus-card" aria-labelledby="focus-title">
       <div class="focus-heading"><h2 id="focus-title">模块放大</h2><span class="focus-scale" id="focus-scale">自动适配</span></div>
-      <div class="focus-stage" data-backdrop="grid"><iframe id="focus-frame" title="模块放大预览" tabindex="-1"></iframe></div>
+      <div class="focus-stage"><iframe id="focus-frame" title="模块放大预览" tabindex="-1"></iframe></div>
     </section>
   </main>
   <footer class="status-bar">
