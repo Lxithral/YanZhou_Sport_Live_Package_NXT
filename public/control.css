@@ -366,7 +366,8 @@ body[data-live="true"] .live-dot { background: var(--live); box-shadow: 0 0 0 3p
 .bg-sample.checker { background: repeating-conic-gradient(var(--canvas-checker-a) 0% 25%, var(--canvas-checker-b) 0% 50%) 0 0 / 8px 8px; }
 .tool-separator { width: 1px; height: 18px; background: var(--line-2); }
 .check-field { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
-.check-field input { margin: 0; }
+.check-field input { min-height: 0; margin: 0; padding: 0; background: transparent; box-shadow: none; }
+.check-field input:focus-visible { outline: 2px solid var(--accent); }
 .preview-stage { flex: 1; min-height: 0; position: relative; display: grid; place-items: center; padding: 14px 14px 30px; background: repeating-conic-gradient(var(--stage-checker-a) 0% 25%, var(--stage-checker-b) 0% 50%) 0 0 / 28px 28px; border-radius: 0 0 var(--r-lg) var(--r-lg); }
 .preview-stage[data-backdrop=dark] { background: var(--page); }
 .stage-hint { position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%); color: var(--faint); font-size: 10.5px; white-space: nowrap; pointer-events: none; opacity: .8; }
@@ -427,7 +428,7 @@ body[data-live="true"] .live-dot { background: var(--live); box-shadow: 0 0 0 3p
 .module-card.live .module-state { color: var(--accent); background: var(--accent-soft); }
 .module-summary { color: var(--text); font-size: 11.5px; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .module-meta { font: 10.5px var(--mono); color: var(--faint); white-space: nowrap; }
-.module-map { position: relative; flex: none; align-self: flex-start; margin-top: 18px; width: 52px; height: 30px; border-radius: 5px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; }
+.module-map { position: relative; flex: none; align-self: flex-start; margin-top: 28px; width: 52px; height: 30px; border-radius: 5px; background: var(--field); box-shadow: inset 0 0 0 1px var(--line-2); overflow: hidden; }
 .module-map-rect { position: absolute; min-width: 6px; min-height: 4px; background: #3b8bfd4d; box-shadow: inset 0 0 0 1px #3b8bfd; border-radius: 1px; }
 .module-foot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; padding-top: 2px; }
 .module-foot:empty { display: none; }
