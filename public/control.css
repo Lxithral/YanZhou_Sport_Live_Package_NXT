@@ -432,9 +432,7 @@ body[data-live="true"] .live-dot { background: var(--live); box-shadow: 0 0 0 3p
 .layout-buttons { justify-content: space-between; gap: 8px; padding-top: 2px; }
 .form-note { color: var(--faint); font-size: 10.5px; line-height: 1.5; }
 .output-foot { flex: none; display: grid; gap: 7px; padding: 9px 11px; border-top: 1px solid var(--line); background: var(--panel-head); border-radius: 0 0 var(--r-lg) var(--r-lg); }
-.output-foot .button { width: 100%; min-height: 30px; font-size: 12px; }
-.save-status { display: inline-flex; align-items: center; gap: 6px; color: var(--ok); font-size: 11px; }
-.save-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.save-status { display: inline-flex; align-items: center; color: var(--ok); font-size: 11px; }
 .save-status.saving { color: var(--muted); }
 .save-status.offline { color: var(--warn); }
 .save-status.error { color: var(--danger); }

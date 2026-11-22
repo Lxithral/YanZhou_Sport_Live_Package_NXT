@@ -150,20 +150,19 @@ try {
   await click('[data-action="division"][data-key="women"]');
   await until('document.querySelector("#rank-rows").textContent.includes("林浩宇")', 'back to the seeded race');
 
-  // 4) 图层开关 + 一键清屏。
+  // 4) 图层开关：逐个上屏再下屏。
   await click('[data-action="module-toggle"][data-key="lineup"]');
   await until('document.querySelector("#preview").contentDocument?.querySelector(".intro-name")?.textContent.length > 0', 'intro on air');
-  await click('[data-action="clear"]');
-  await until('document.querySelector("#module-footer [data-action=base]") !== null', 'clear all output');
-  assert.equal(await evaluate('document.querySelector("#layer-count").textContent'), '上屏 0 / 4');
-  report.checks.push('Layer toggles and clear-screen work from the output column footer.');
+  await click('[data-action="module-toggle"][data-key="lineup"]');
+  await until('document.querySelector("#preview").contentDocument?.querySelectorAll(".layer:not([hidden])").length === 2', 'intro off air');
+  report.checks.push('Layer toggles put layers on air and take them off from the output column.');
 
   // 5) 尺寸自适应。
   await viewport(1366, 768);
   await screenshot('control-laptop.png');
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
-  assert.equal(await evaluate('(() => { const box = document.querySelector("#module-footer").getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight; })()'), true);
-  report.checks.push('1366x768 keeps the layer footer and save status on screen without horizontal scroll.');
+  assert.equal(await evaluate('(() => { const box = document.querySelector(".save-status").getBoundingClientRect(); return box.top >= 0 && box.bottom <= innerHeight; })()'), true);
+  report.checks.push('1366x768 keeps the save status on screen without horizontal scroll.');
   await viewport(1100, 800);
   await screenshot('control-tablet.png');
   assert.equal(await evaluate('getComputedStyle(document.querySelector(".mobile-nav")).display'), 'grid');

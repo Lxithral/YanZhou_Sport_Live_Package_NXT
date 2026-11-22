@@ -60,12 +60,9 @@ html, body, #stage { background: transparent !important; }
   color: #fff7ec;
 }
 .eb-rule { flex: none; width: 8px; background: linear-gradient(180deg, #f3c791, var(--accent) 58%, #8a5628); }
-.eb-copy { display: grid; align-content: center; gap: 4px; min-width: 0; flex: 1; padding: 0 18px 0 24px; }
+.eb-copy { display: grid; align-content: center; gap: 4px; min-width: 0; flex: 1; padding: 0 26px 0 24px; }
 .eb-copy strong { font-size: 48px; line-height: 1.04; font-weight: 840; letter-spacing: .015em; text-shadow: 0 2px 12px #00000059; }
 .eb-copy small { color: #cbb2a1; font-size: 22px; font-weight: 600; letter-spacing: .08em; }
-.eb-count { flex: none; display: grid; place-items: center; align-content: center; width: 112px; border-left: 1px solid #e8c08a2e; background: linear-gradient(180deg, #ffffff0d, #ffffff03); }
-.eb-count b { color: #f3c791; font-size: 46px; line-height: 1.04; font-weight: 800; font-variant-numeric: tabular-nums; }
-.eb-count span { color: #c2a795; font-size: 17px; font-weight: 600; letter-spacing: .26em; text-indent: .26em; }
 
 .score-ribbon {
   display: grid;

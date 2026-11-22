@@ -128,8 +128,7 @@ function sportsGraphic(key, event) {
       const grade = event.schedule?.grade;
       const context = [grade === 'staff' ? '' : GRADES[grade], event.stage, group].filter(Boolean).join(' · ');
       return `<div class="event-banner"><span class="eb-rule" aria-hidden="true"></span>
-        <div class="eb-copy"><strong>${h(event.name)}</strong><small>${h([context, event.venue].filter(Boolean).join(' · '))}</small></div>
-        <div class="eb-count"><b>${String(state.eventNumber ?? 0).padStart(2, '0')}</b><span>场</span></div></div>`;
+        <div class="eb-copy"><strong>${h(event.name)}</strong><small>${h([context, event.venue].filter(Boolean).join(' · '))}</small></div></div>`;
     }
     // case 'score': 球赛记分牌先不用。
     // case 'teams': 班级积分榜先不用。

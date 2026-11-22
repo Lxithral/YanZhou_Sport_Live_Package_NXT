@@ -265,7 +265,6 @@ function renderLayers(event) {
   const visible = available.filter((key) => state.modules[key].visible).length;
   $('#layer-count').textContent = `上屏 ${visible} / ${available.length}`;
   updateRegion('#module-list', moduleList(state, event, layoutKey));
-  updateRegion('#module-footer', button(visible ? '一键清屏' : '恢复基础包装', { action: visible ? 'clear' : 'base', glyph: 'screen', variant: visible ? 'clear-output' : '' }));
 }
 
 function renderQuickEntry(event) {
@@ -324,7 +323,6 @@ function render() {
   updateRegion('#active-event-picker', currentEventPicker(listed, state.activeEventId));
   $('#edit-active').disabled = !event;
   updateRegion('#operations', operations(event));
-  $('#work-count').textContent = `${state.events.length} 场赛事`;
   renderHeader(event);
   renderNextEvent(event);
   renderRoster();
@@ -534,8 +532,6 @@ const handlers = {
   },
   page({ key, value }) { return run('page:set', { eventId: state.activeEventId, key, page: value }); },
   'roster-page'({ value }) { rosterView.page = value; renderRoster(); },
-  clear() { return run('module:clear', { eventId: state.activeEventId }, '画面已清屏'); },
-  base() { return run('module:base', { eventId: state.activeEventId }, '已恢复基础包装'); },
   meet() { dialogs.meet(state, output); },
   'work-view'({ key }) { setTableView(key); },
   'module-select'({ key }) { selectModule(key); },
