@@ -4,7 +4,7 @@ export const FESTIVAL_NAME = '第五届「烟伙杯」校运会';
 export const CHECK_IN_MINUTES = 25;
 export const AWARD_LIMIT = 8;
 
-// 先只播出 800 米和 1000 米。其余秩序册条目整段留在下面，恢复时去掉行首注释。
+// 只播出男子、女子 800 米四项。其余秩序册条目整段留在下面，恢复时去掉行首注释。
 const fridayMorning = [
   // ['07:30', 'g1', 'women', 'run-100', 'heat'], ['07:45', 'g2', 'women', 'run-100', 'heat'],
   // ['08:05', 'g1', 'men', 'run-100', 'heat'], ['08:20', 'g2', 'men', 'run-100', 'heat'],
@@ -46,19 +46,20 @@ function race(day, [time, grade, division, project, round = 'final']) {
 export const SCHOOL_RACES = [
   ...[...fridayMorning, ...fridayAfternoon].map((row) => race(27, row)),
   ...saturdayMorning.map((row) => race(28, row)),
-  ...['g1', 'g2'].flatMap((grade) => [race(null, ['', grade, 'men', 'run-1000']),
-    // race(null, ['', grade, 'men', 'run-1500']), race(null, ['', grade, 'women', 'run-1500']),
-  ]),
+  // 1000 米先不播，恢复时去掉行首注释。
+  // ...['g1', 'g2'].flatMap((grade) => [race(null, ['', grade, 'men', 'run-1000']),
+  //   race(null, ['', grade, 'men', 'run-1500']), race(null, ['', grade, 'women', 'run-1500']),
+  // ]),
   // { ...PRESETS['staff-teams'], id: 'school-staff-teams', division: 'open', stage: '赛制待定', venue: '',
   //   schedule: { grade: 'staff', project: 'staff-teams', round: 'pending', start: '', session: '11/27 下午' } },
 ].sort(compareSchedule);
 
-export const LIVE_PROJECTS = new Set(['run-800', 'run-1000']);
+export const LIVE_PROJECTS = new Set(['run-800']);
 
 export function onProgram(event) {
   if (!event) return false;
   if (event.schedule) return LIVE_PROJECTS.has(event.schedule.project);
-  return event.kind === 'track' && (event.distance === 800 || event.distance === 1000);
+  return event.kind === 'track' && event.distance === 800;
 }
 
 export function compareSchedule(first, second) {

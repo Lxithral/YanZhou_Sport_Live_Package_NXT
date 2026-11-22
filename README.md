@@ -9,7 +9,7 @@
 3. 在 OBS 添加「浏览器」来源。保持「本地文件」关闭，URL 填 [输出地址](http://127.0.0.1:3120/overlay.html)，宽 **1920**、高 **1080**。将浏览器源放在摄像机来源上方。
 4. 如画面动效不够顺滑，可跟随 OBS 的输出帧率把浏览器源设为 **60 FPS**。保持「不可见时关闭来源」与「场景激活时刷新浏览器」关闭。[OBS 浏览器来源文档](https://obsproject.com/kb/browser-source)
 
-导播台的棋盘格、深灰和跑道只是监看底图。将透明输出地址添加为 OBS「浏览器」来源后，空白区域会透出下方的视频。普通浏览器窗口由桌面提供底色，直播叠加请直接使用浏览器来源。
+导播台的棋盘格和深灰只是监看底图。将透明输出地址添加为 OBS「浏览器」来源后，空白区域会透出下方的视频。普通浏览器窗口由桌面提供底色，直播叠加请直接使用浏览器来源。
 
 便携包内置 Windows x64 Node.js 与 WebSocket 依赖，解压后可离线运行。导播台和 OBS 在同一台电脑上使用。若 3120 端口已被占用，可在 PowerShell 中运行 `$env:YANZHOU_PORT = '3121'` 和 `.\start.cmd`，再用导播台复制新地址。
 
@@ -76,5 +76,3 @@ node tools/check-ui.mjs
 ```
 
 `npm.cmd start` 后手动打开导播台。从源码运行时可以用 `node tools/check-ui.mjs` 自查界面：它用临时数据目录起一个实例，无头浏览器跑一遍快速录入、行内改成绩、切换组别收画面、图层开关和 1920 / 1366 / 1100 / 390 四档布局，把截图与结果写到 `dist/ui-review`（需要本机有 Chrome / Chromium / Edge，可用 `CHROME_PATH` 指定；便携包里没有这个脚本）。运行 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\package-windows.ps1` 生成 `dist` 下的 Windows 便携 ZIP 及 SHA-256 校验文件。构建使用 [Node.js v24.22.3 Windows 发行包](https://nodejs.org/en/blog/release/v24.22.3/)，运行时许可证随包分发。
-
-导播台跑道背景由 ImageGen 生成，用于检查不同图层的遮挡和对比度。

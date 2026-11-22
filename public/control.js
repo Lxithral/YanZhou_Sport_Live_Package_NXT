@@ -4,7 +4,7 @@ import { athleteFields, athleteForm, button, competitorPanel, currentEventPicker
 import { createRanking } from './ranking.js';
 import { createMeetDesk, raceActions } from './meet-control.js';
 import { compareSchedule, finalFor, onProgram, topRows } from './meet-program.js';
-import { MODULES, activeEvent, applicable, clamp, eventRound, eventTitle, formatTime, jumpHeight, moduleBounds, modulePosition, nextJumpHeight, safeAnchor, sameProject } from './sport.js';
+import { GRADES, MODULES, activeEvent, applicable, clamp, eventRound, eventTitle, formatTime, jumpHeight, moduleBounds, modulePosition, nextJumpHeight, safeAnchor, sameProject } from './sport.js';
 
 const $ = (selector) => document.querySelector(selector);
 const workspace = $('.app-shell');
@@ -35,7 +35,7 @@ let guides = true;
 
 try {
   const prefs = JSON.parse(localStorage.getItem('yanzhou-sports-preview'));
-  if (['track', 'grid', 'dark'].includes(prefs?.backdrop)) backdrop = prefs.backdrop;
+  if (['grid', 'dark'].includes(prefs?.backdrop)) backdrop = prefs.backdrop;
   if (typeof prefs?.guides === 'boolean') guides = prefs.guides;
 } catch { /* Preserve defaults if browser storage is unavailable. */ }
 
@@ -292,8 +292,6 @@ function renderHeader(event) {
   const live = event ? state.modules.results.visible || state.modules.lineup.visible || state.modules.event.visible : false;
   const bits = [];
   if (event) bits.push(`${event.competitors.length} 位选手`);
-  if (event?.schedule?.start) bits.push(`${event.schedule.start.slice(5, 10).replace('-', '/')} · ${event.schedule.start.slice(11, 16)} 开赛`);
-  else if (event) bits.push('时间待定');
   bits.push(live ? '画面进行中' : '待机');
   $('#live-meta').textContent = bits.join(' · ');
   document.body.dataset.live = String(Boolean(event && live));
@@ -303,7 +301,7 @@ function renderNextEvent(event) {
   const program = state.events.filter(onProgram).toSorted(compareSchedule);
   const index = event ? program.findIndex((row) => row.id === event.id) : -1;
   const next = program[index + 1] ?? null;
-  updateRegion('#event-next', next ? button(`下一场 ${next.schedule.start.slice(11, 16)}`, { action: 'schedule-live', key: next.id, small: true, glyph: 'right', accessible: `下一场 · ${eventTitle(next)}` }) : '');
+  updateRegion('#event-next', next ? button(`下一场 · ${next.name} ${GRADES[next.schedule?.grade] ?? ''}`.trim(), { action: 'schedule-live', key: next.id, small: true, glyph: 'right', accessible: `下一场 · ${eventTitle(next)}` }) : '');
 }
 
 function render() {

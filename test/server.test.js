@@ -64,7 +64,7 @@ test('control and output stay in sync and a restart restores the race', async (t
   const operator = connect(base);
   const output = connect(base, 'view');
   const [live, view] = await Promise.all([operator.state(), output.state()]);
-  assert.equal(live.events.length, 6);
+  assert.equal(live.events.length, 4);
   assert.ok(live.events.every(({ schedule }) => schedule));
   assert.equal(view.events.length, 1);
   assert.equal(activeEvent(live).competitors.length, 0);

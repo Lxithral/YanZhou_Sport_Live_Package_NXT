@@ -72,7 +72,7 @@ function eventOptions(events) {
   }
   return list.flatMap(({ label, children }) => [
     { label, disabled: true, group: true },
-    ...children.map((event) => ({ value: event.id, label: `${eventTitle(event)}${event.schedule ? ` · ${event.schedule.start.slice(5, 10).replace('-', '/')} ${event.schedule.start.slice(11, 16)}` : ''}` })),
+    ...children.map((event) => ({ value: event.id, label: eventTitle(event) })),
   ]);
 }
 

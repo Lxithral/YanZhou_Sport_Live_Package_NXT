@@ -16,29 +16,28 @@ function operator(id) {
   return app;
 }
 
-test('school schedule keeps 800 m and 1000 m while the other events stay commented out', () => {
+test('school schedule keeps only the four 800 m finals while the other events stay commented out', () => {
   const timed = SCHOOL_RACES.filter(({ schedule }) => schedule.start);
   assert.equal(timed.length, 4);
-  assert.equal(new Set(SCHOOL_RACES.map(({ id }) => id)).size, 6);
+  assert.equal(new Set(SCHOOL_RACES.map(({ id }) => id)).size, 4);
   assert.deepEqual(timed.reduce((counts, { schedule }) => {
     const period = scheduleSession(schedule);
     counts[period] = (counts[period] ?? 0) + 1;
     return counts;
   }, {}), { '11/27 下午': 4 });
   assert.equal(SCHOOL_RACES[0].id, 'school-g1-women-run-800-final');
-  assert.ok(SCHOOL_RACES.slice(-2).every(({ schedule }) => !schedule.start && schedule.project === 'run-1000'));
+  assert.ok(SCHOOL_RACES.every(({ schedule }) => schedule.project === 'run-800' && schedule.start));
   assert.equal(checkInTime(timed[0].schedule.start), '13:50');
   assert.equal(SCHOOL_RACES.filter((event) => event.schedule.round === 'heat').length, 0);
-  assert.equal(SCHOOL_RACES.filter(({ schedule }) => schedule.project === 'run-800').length, 4);
   assert.equal(verifyState(initialState()).version, 9);
 });
 
 test('upgrade removes empty generic presets and retains actual registrations and the current school race', () => {
   const app = operator('school-g2-men-run-800-final');
   app.roster([{ name: '正式选手', result: '12.34', heat: 2 }]);
-  const { schedule, ...preset } = structuredClone(initialState().events.find(({ id }) => id === 'school-g1-men-run-1000-final'));
-  const blank = { ...preset, id: 'run-1000' };
-  const registered = { ...structuredClone(preset), id: 'run-1000-women', division: 'women', competitors: app.event.competitors };
+  const { schedule, ...preset } = structuredClone(initialState().events.find(({ id }) => id === 'school-g1-women-run-800-final'));
+  const blank = { ...preset, id: 'run-800' };
+  const registered = { ...structuredClone(preset), id: 'run-800-women', division: 'women', competitors: app.event.competitors };
   const old = { ...app.state, version: 4, events: [blank, registered, ...app.state.events] };
   const updated = verifyState(migrateState(verifyState(old)));
   assert.equal(updated.version, 9);

@@ -103,7 +103,7 @@ test('legacy shared graphics migrate to the live event and female events retain 
   assert.equal(migrated.events.filter((event) => !event.schedule && event.division === 'women' && event.name === '铅球').length, 1);
   assert.equal(migrated.events.filter((event) => event.schedule && event.name === '铅球').length, 0);
   assert.equal(migrated.events.filter((event) => event.schedule && event.distance === 800).length, 4);
-  assert.equal(migrated.events.filter((event) => event.schedule && event.distance === 1000).length, 2);
+  assert.equal(migrated.events.filter((event) => event.schedule && event.distance === 1000).length, 0);
 });
 
 test('field entries keep valid, skipped and invalid attempts together and reject duplicate bibs', () => {

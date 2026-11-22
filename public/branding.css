@@ -32,6 +32,7 @@
   background: #12161b !important;
 }
 
+/* 跑道底图已移除，用暗色渐变代替，仍可检查角标与徽标的对比度。 */
 .branding-preview #stage {
-  background: #162d32 url('/assets/track-preview.png') center / cover no-repeat !important;
+  background: radial-gradient(120% 130% at 18% 12%, #234a51 0%, #162d32 45%, #0d1a1e 100%) !important;
 }

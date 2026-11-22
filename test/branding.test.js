@@ -85,7 +85,9 @@ test('preview loads the production renderer without WebSocket with only the left
   assert.match(html, /class="guides" data-branding-preview/);
   assert.match(html, /src="\/overlay.js"/);
   const css = await readFile(new URL('../public/branding.css', import.meta.url), 'utf8');
-  assert.match(css, /\/assets\/track-preview\.png/);
+  assert.doesNotMatch(css, /track-preview\.png/, '角标预览不应再依赖已删除的跑道底图');
+  assert.match(css, /\.branding-preview #stage\s*\{[^}]*background:[^;]*#0d1a1e/);
+  assert.doesNotMatch(css, /branding-silver|background-clip/);
   const overlay = await renderOverlay(t, '', true);
   assert.equal(overlay.connected, false);
   const channel = overlay.node('layer--brand').children[0].innerHTML;

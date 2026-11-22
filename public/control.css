@@ -235,15 +235,14 @@ body[data-live="true"] .live-dot { background: var(--live); box-shadow: 0 0 0 3p
 .meet-table { border: 1px solid var(--line-2); border-radius: var(--r-md); overflow: hidden; background: var(--field); }
 .schedule-row, .points-row { min-height: 38px; display: grid; gap: 8px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--line); }
 .schedule-row:last-child, .points-row:last-child { border-bottom: 0; }
-.schedule-row { grid-template-columns: 90px minmax(0, 1fr) auto; }
+.schedule-row { grid-template-columns: minmax(0, 1fr) auto; }
 .points-row { grid-template-columns: 58px minmax(0, 1fr) 76px 64px; }
 .schedule-row:hover { background: var(--row-hover); }
 .schedule-row.current { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
-.schedule-time, .schedule-name { display: grid; min-width: 0; line-height: 1.15; gap: 2px; }
-.schedule-name > *, .schedule-time small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.schedule-name { display: grid; min-width: 0; line-height: 1.15; gap: 2px; }
+.schedule-name > * { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .schedule-name small:empty { display: none; }
 .schedule-name > b { font-size: 13px; font-weight: 620; }
-.schedule-time > b { font: 650 13px var(--mono); }
 .points-head { min-height: 30px; color: var(--muted); font-size: 12px; background: var(--panel-head); }
 .rank-mark .result-note { color: var(--gold); display: block; font: 10px/1.1 "Segoe UI", "Microsoft YaHei UI", sans-serif; }
 #roster-rows .relay-invalid { color: #ffb0b8; }
@@ -364,25 +363,21 @@ body[data-live="true"] .live-dot { background: var(--live); box-shadow: 0 0 0 3p
 .background-switch button[aria-pressed=true] { background: var(--raised); box-shadow: inset 0 0 0 1px var(--line-3); color: var(--text); }
 .bg-sample { display: block; width: 14px; height: 12px; border-radius: 3px; }
 .bg-sample.dark { background: var(--canvas-dark); box-shadow: inset 0 0 0 1px var(--line-3); }
-.bg-sample.track { background: #162d32 url('/assets/track-preview.png') center / cover no-repeat; }
 .bg-sample.checker { background: repeating-conic-gradient(var(--canvas-checker-a) 0% 25%, var(--canvas-checker-b) 0% 50%) 0 0 / 8px 8px; }
 .tool-separator { width: 1px; height: 18px; background: var(--line-2); }
 .check-field { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; white-space: nowrap; cursor: pointer; }
 .check-field input { margin: 0; }
 .preview-stage { flex: 1; min-height: 0; position: relative; display: grid; place-items: center; padding: 14px 14px 30px; background: repeating-conic-gradient(var(--stage-checker-a) 0% 25%, var(--stage-checker-b) 0% 50%) 0 0 / 28px 28px; border-radius: 0 0 var(--r-lg) var(--r-lg); }
 .preview-stage[data-backdrop=dark] { background: var(--page); }
-.preview-stage[data-backdrop=track] { background: #101d21 url('/assets/track-preview.png') center / cover no-repeat; }
 .stage-hint { position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%); color: var(--faint); font-size: 10.5px; white-space: nowrap; pointer-events: none; opacity: .8; }
 .monitor-canvas { border-radius: 5px; overflow: hidden; background: repeating-conic-gradient(var(--canvas-checker-a) 0% 25%, var(--canvas-checker-b) 0% 50%) 0 0 / 32px 32px; box-shadow: 0 0 0 1px var(--line-3), 0 18px 40px -22px #000; }
 .preview-stage[data-backdrop=dark] .monitor-canvas { background: var(--canvas-dark); }
-.preview-stage[data-backdrop=track] .monitor-canvas { background: #162d32 url('/assets/track-preview.png') center / cover no-repeat; }
 .monitor-canvas iframe { display: block; width: 100%; height: 100%; border: 0; color-scheme: normal; }
 .focus-heading { gap: 8px; }
 .focus-heading h2 { font-size: 12.5px; }
 .focus-heading h2::before { width: 5px; height: 5px; background: var(--faint); }
 .focus-stage { flex: 1; min-height: 0; position: relative; overflow: hidden; background: repeating-conic-gradient(var(--stage-checker-a) 0% 25%, var(--stage-checker-b) 0% 50%) 0 0 / 28px 28px; border-radius: 0 0 var(--r-lg) var(--r-lg); }
 .focus-stage[data-backdrop=dark] { background: var(--page); }
-.focus-stage[data-backdrop=track] { background: #101d21 url('/assets/track-preview.png') center / cover no-repeat; }
 #focus-frame { position: absolute; top: 0; left: 0; width: 1920px; height: 1080px; border: 0; transform-origin: 0 0; pointer-events: none; color-scheme: normal; }
 
 /* ───── 比赛操作条 ───── */
@@ -610,9 +605,8 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
   .ball-team { flex-basis: 100%; }
   .work-tabs { max-width: calc(100% - 16px); margin: 8px 8px 0; }
   .work-tabs button { padding-inline: 8px; font-size: 12px; }
-  .schedule-row { grid-template-columns: 64px minmax(0, 1fr) auto; gap: 5px; padding-inline: 5px; }
+  .schedule-row { grid-template-columns: minmax(0, 1fr) auto; gap: 5px; padding-inline: 5px; }
   .schedule-name b { font-size: 12px; }
-  .schedule-time > small { font-size: 9px; }
   .meet-row-actions .button { min-height: 25px; padding-inline: 5px; }
   .points-row { grid-template-columns: 40px minmax(0, 1fr) 47px 55px; gap: 5px; }
   .work-toolbar, .prep-toolbar { padding-block: 6px; gap: 5px; }
