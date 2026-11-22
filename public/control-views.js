@@ -93,11 +93,11 @@ function championPaneRow(event, athlete, pane) {
   const current = event.kind === 'track' && athlete.time != null ? formatTime(athlete.time, true) : '';
   return `<tr class="champion-pane"><td colspan="3">
     <div class="champion-editor">
-      <span class="champion-editor-name">冠军 · ${h(athlete.name)}</span>
+      <span class="champion-editor-name">${icon('trophy')}<span class="champion-editor-copy"><b>${h(athlete.name)}</b>${athlete.team ? `<small>${h(athlete.team)}</small>` : ''}</span></span>
       ${scoreField ? `<input id="champion-mark" placeholder="${event.kind === 'field' ? '试次，如 5.35 或 X' : '成绩，如 2:05.00'}" value="${h(current)}" autocomplete="off" spellcheck="false" inputmode="${event.kind === 'field' ? 'decimal' : 'text'}" aria-label="冠军成绩">` : ''}
       <div class="champion-editor-actions">
         ${scoreField ? button('推送', { action: 'champion-push', variant: 'primary' }) : ''}
-        ${pane.pushed ? button('显示', { action: 'champion-show', variant: 'capture' }) : ''}
+        ${pane.pushed ? button('显示', { action: 'champion-show', variant: 'published' }) : ''}
         ${button('', { action: 'champion-close', glyph: 'close', iconOnly: true, accessible: '收起成绩栏' })}
       </div>
     </div>
