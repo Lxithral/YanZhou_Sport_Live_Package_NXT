@@ -1,6 +1,6 @@
 import { escapeHtml as h } from './client.js';
 import { athleteFields, button, icon, pager } from './control-views.js';
-import { activeEvent, canJump, formatMark, formatTime, jumpHeight, resultText, roster, standings } from './sport.js';
+import { activeEvent, canJump, jumpHeight, resultText, roster, standings } from './sport.js';
 import { beatsRecord } from './meet-program.js';
 
 const SPECIAL = ['DNS', 'DNF', 'DQ', 'NM'];
@@ -130,29 +130,12 @@ export function createRanking({ getState, run, notify, updateRegion, confirm }) 
     </form>`;
   }
 
-  function stageMarkup(event, visible) {
-    if (!event) return '';
-    const winner = standings(event).find((row) => row.rank === 1);
-    const label = event.kind === 'match' ? '比分牌' : '冠军榜';
-    const small = winner ? `第一名 ${winner.athlete.name} · ${resultText(winner.athlete, event)}` : '等待第一名产生';
-    const action = button(visible ? '撤下' : '上屏', {
-      action: 'rank-live',
-      variant: visible ? 'published' : 'primary',
-      glyph: visible ? 'eye-off' : 'screen',
-      accessible: `${visible ? '撤下' : '上屏'}${label}`,
-    });
-    return `<div class="stage-card${visible ? ' live' : ''}">
-      <span class="stage-copy"><strong>${label}</strong><small>${h(small)}</small></span>
-      ${action}
-    </div>`;
-  }
-
   function render() {
     const state = getState();
     if (!state) return;
     const event = eventOf();
     if (!event) {
-      for (const id of ['#rank-controls', '#rank-mode', '#rank-rows', '#rank-summary', '#rank-pager', '#rank-reset-control', '#school-race-actions']) updateRegion(id, '');
+      for (const id of ['#rank-mode', '#rank-rows', '#rank-summary', '#rank-pager', '#rank-reset-control', '#school-race-actions']) updateRegion(id, '');
       panel.dataset.kind = '';
       return;
     }
@@ -163,9 +146,7 @@ export function createRanking({ getState, run, notify, updateRegion, confirm }) 
     unavailable.hidden = !matchEvent;
     table.hidden = matchEvent;
     if (matchEvent) unavailable.textContent = '球赛用页面下方的比分条记分，名次榜不参与这场比赛。';
-    const visible = state.modules.results.visible;
     rowsBox.classList.toggle('is-editing', Boolean(editing));
-    updateRegion('#rank-controls', event.kind === 'match' ? '' : stageMarkup(event, visible));
     updateRegion('#rank-mode', event.rankOrder ? '手动排名' : '按成绩');
     limit = measureLimit();
     if (editing && !event.competitors.some((athlete) => athlete.id === editing)) editing = null;
@@ -258,7 +239,6 @@ export function createRanking({ getState, run, notify, updateRegion, confirm }) 
         render();
       } else if (action === 'rank-append') await run('rank:move', { eventId: current.id, id: key, beforeId: null });
       else if (action === 'rank-return') await run('rank:remove', { eventId: current.id, id: key });
-      else if (action === 'rank-live') await run('module:save', { key: 'results', patch: { visible: !getState().modules.results.visible }, eventId: current.id });
       else if (action === 'rank-reset') {
         if (!(await confirm('清空名次', '将清空这场比赛的手动名次，成绩本身会保留。', '清空名次', () => run('rank:reset', { eventId: current.id })))) return;
       } else if (action === 'rank-page') {
