@@ -209,7 +209,7 @@ body[data-live="true"] .live-dot { background: var(--live); box-shadow: 0 0 0 3p
 .mobile-nav { display: none; }
 .app-shell {
   flex: 1; min-height: 0; display: grid; gap: 10px; padding: 10px 12px;
-  grid-template-columns: clamp(330px, 21vw, 372px) minmax(0, 1fr) clamp(400px, 26vw, 468px);
+  grid-template-columns: clamp(300px, 18.5vw, 340px) minmax(0, 1fr) clamp(400px, 26vw, 468px);
   grid-template-rows: minmax(0, 1fr);
   grid-template-areas: "output preview work";
 }
@@ -406,7 +406,7 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
 }
 @media (min-width: 1181px) and (max-width: 1500px) {
   .app-shell {
-    grid-template-columns: clamp(300px, 22vw, 330px) minmax(0, 1fr) clamp(372px, 29vw, 412px);
+    grid-template-columns: clamp(270px, 20vw, 304px) minmax(0, 1fr) clamp(372px, 29vw, 412px);
     grid-template-rows: minmax(0, 1fr);
     grid-template-areas: "output preview work";
   }
