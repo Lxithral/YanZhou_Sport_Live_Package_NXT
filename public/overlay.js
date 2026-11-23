@@ -1,6 +1,6 @@
 import { SportsClient, escapeHtml as h } from './client.js';
 import {
-  CANVAS, GRADES, MODULES, SAFE_AREA, activeEvent, applicable, clamp, defaultLayout, heats,
+  CANVAS, GRADES, KINDS, MODULES, SAFE_AREA, activeEvent, applicable, clamp, defaultLayout, heats,
   lineupRoster, moduleBounds, modulePosition, paginatedCount, resultText, standings,
 } from './sport.js';
 import { className } from './meet-program.js';
@@ -87,12 +87,11 @@ function championGraphic(event) {
   const timeSize = Math.min(46, Math.max(22, Math.floor(260 / (time.length * .62))));
   return `<div class="winner-card" aria-label="第一名">
     <div class="winner-crown">冠军</div>
-    <span class="winner-medal"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4zM7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3"/></svg></span>
     <div class="winner-body">
       <strong class="winner-name" style="--name-size: ${nameSize}px">${h(name)}</strong>
       <span class="winner-rule" aria-hidden="true"></span>
+      <span class="winner-time" style="--time-size: ${timeSize}px">${h(time)}</span>
     </div>
-    <span class="winner-time" style="--time-size: ${timeSize}px">${h(time)}</span>
   </div>`;
 }
 
@@ -133,8 +132,7 @@ function sportsGraphic(key, event) {
       const group = event.kind === 'track' && heats(event).length > 1 ? `第 ${event.heat ?? 1} 组` : '';
       const grade = event.schedule?.grade;
       const context = [grade === 'staff' ? '' : GRADES[grade], event.stage, group].filter(Boolean).join(' · ');
-      return `<div class="event-banner"><span class="eb-rule" aria-hidden="true"></span>
-        <div class="eb-copy"><strong>${h(event.name)}</strong><small>${h(context)}</small></div></div>`;
+      return `<div class="event-banner"><span class="eb-tag">${h(KINDS[event.kind] ?? '赛事')}</span><div class="eb-copy"><strong>${h(event.name)}</strong><small>${h(context)}</small></div></div>`;
     }
     // case 'score': 球赛记分牌先不用。
     // case 'teams': 班级积分榜先不用。

@@ -169,15 +169,17 @@ try {
 
   await screenshot('control-desktop.png');
 
-  // 4) 行内添加选手：表单只有姓名、班级、道次。
+  // 4) 行内添加选手：表单填姓名、班级、道次和成绩。
   await click('[data-action="athlete-add"]');
   await until('document.querySelector("#roster-form") !== null', 'inline athlete form');
   assert.equal(await evaluate('document.querySelector("#roster-form [name=bib]")'), null, 'bib field removed from the form');
+  assert.equal(await evaluate('document.querySelector("#roster-form [name=result]") !== null'), true, 'score field in the form');
   assert.ok((await evaluate('document.querySelector("#roster-rows thead").textContent')).includes('姓名 / 班级'));
   await type('#roster-form [name=name]', '测试选手');
+  await type('#roster-form [name=result]', '2:10.00');
   await submit('#roster-form');
-  await until('document.querySelector("#roster-rows").textContent.includes("测试选手")', 'athlete added inline');
-  report.checks.push('Adding an athlete happens inline with just name, class and lane.');
+  await until('document.querySelector("#roster-rows").textContent.includes("测试选手") && document.querySelector("#roster-rows").textContent.includes("02:10.00")', 'athlete added inline');
+  report.checks.push('Adding an athlete happens inline and the score can be typed into the form.');
   await screenshot('control-roster.png');
 
   // 5) 尺寸自适应。

@@ -2,7 +2,7 @@ import { SportsClient, pageUrl } from './client.js';
 import { Dialogs } from './control-dialogs.js';
 import { athleteFields, athleteForm, competitorPanel, inspector, moduleList, pager, rosterTools } from './control-views.js';
 import { onProgram } from './meet-program.js';
-import { MODULES, activeEvent, applicable, clamp, eventTitle, moduleBounds, standings } from './sport.js';
+import { MODULES, activeEvent, applicable, clamp, eventTitle, formatTime, moduleBounds, standings } from './sport.js';
 
 const $ = (selector) => document.querySelector(selector);
 const workspace = $('.app-shell');
@@ -255,8 +255,14 @@ document.querySelector('#roster-editor').addEventListener('submit', async (event
   const existing = id ? current?.competitors.find((athlete) => athlete.id === id) : undefined;
   const data = new FormData(form);
   const picks = (name) => String(data.get(name) ?? '').trim();
-  // 表单只填姓名、班级、道次，其余数据原样保留
+  // 表单只填姓名、班级、道次、成绩，其余数据原样保留
   const fields = athleteFields(current, existing, { name: picks('name'), team: picks('team'), lane: picks('lane') });
+  if (data.has('result')) {
+    const typed = picks('result');
+    const currentResult = existing?.time != null ? formatTime(existing.time, true) : '';
+    if (typed !== currentResult) { fields.result = typed; fields.status = ''; }
+  }
+  if (data.has('attempts')) fields.attempts = picks('attempts');
   try {
     await run('athlete:save', { eventId, id: id || undefined, fields }, id ? '选手已更新' : '选手已添加');
     rosterEditing = null;

@@ -110,12 +110,15 @@ export function athleteForm(event, athlete) {
   const editing = Boolean(athlete);
   const profile = athlete ?? { lane: '', name: '', team: '' };
   const track = event.kind === 'track';
+  const field = event.kind === 'field' && event.schedule?.project !== 'high-jump';
   return `<form id="roster-form" data-event="${event.id}" data-athlete="${athlete?.id ?? ''}" novalidate>
     <div class="re-head"><strong>${editing ? `编辑 ${h(athlete.name)}` : '添加选手'}</strong></div>
     <div class="field-grid">
       <label class="field field-wide"><span>姓名 / 队名</span><input name="name" maxlength="30" value="${h(profile.name ?? '')}" placeholder="如 陆晨曦" required></label>
       <label class="field"><span>单位 / 班级</span><input name="team" maxlength="35" value="${h(profile.team ?? '')}" placeholder="高一3班"></label>
       <label class="field"><span>${track ? '道次' : '出场序'}</span><input name="lane" type="number" min="1" max="999" value="${h(profile.lane ?? '')}" placeholder="—"></label>
+      ${track ? `<label class="field field-wide"><span>成绩</span><input name="result" maxlength="24" value="${athlete?.time != null ? formatTime(athlete.time, true) : ''}" placeholder="如 2:05.00" autocomplete="off" spellcheck="false"></label>`
+        : field ? `<label class="field field-wide"><span>试次</span><input name="attempts" maxlength="128" value="${h(attemptsValue(athlete ?? {}))}" placeholder="5.20 | 5.35 | X" autocomplete="off" spellcheck="false"></label>` : ''}
     </div>
     <div class="re-actions">
       ${editing ? button('删除选手', { action: 'athlete-delete', key: athlete.id, variant: 'danger subtle', small: true }) : ''}
