@@ -159,6 +159,14 @@ try {
   await until('document.querySelector("#preview").contentDocument?.querySelector(".layer--event")?.style.left === "300px"', 'layout auto applied');
   report.checks.push('Layout changes apply immediately without an apply button.');
 
+  // 3.5) 右下角角标文字：选中 Logo 挂角后在面板里改，监看立即更新。
+  await evaluate('document.activeElement?.blur?.()');
+  await click('[data-action="module-select"][data-key="brand"]');
+  await until('document.querySelector("#layout-form [name=corner]") !== null', 'corner text field');
+  await type('#layout-form [name=corner]', '测试角标');
+  await until('document.querySelector("#preview").contentDocument?.querySelector(".branding-corner-text")?.textContent === "测试角标"', 'corner caption updated');
+  report.checks.push('The bottom-right corner caption is editable from the brand layer settings.');
+
   await screenshot('control-desktop.png');
 
   // 4) 行内添加选手：表单只有姓名、班级、道次。

@@ -199,7 +199,12 @@ function updateBrandCorners() {
       height: MODULES[key].h * layout.scale / 100,
     });
   }
-  for (const { node, box } of brandCorners) {
+  const cornerText = state.meet?.corner ?? '';
+  for (const { node, box, caption } of brandCorners) {
+    if (caption) {
+      caption.textContent = cornerText;
+      caption.hidden = !cornerText;
+    }
     node.hidden = !showBrandCorner(mode, brandVisible, focusKey, box, occupied);
   }
 }

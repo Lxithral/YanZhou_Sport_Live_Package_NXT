@@ -75,7 +75,7 @@ test('legacy basketball is removed without deleting other events or modifying st
   const { events, ...previous } = clientState(app.state, false);
   const oldEvents = events.slice(-2).map(({ division, ...event }) => ({ ...event, stage: eventStage({ ...event, division }) }));
   const next = verifyState(migrateState(verifyState({ ...previous, events: oldEvents, version: 1 })));
-  assert.equal(next.version, 9);
+  assert.equal(next.version, 10);
   assert.equal(activeEvent(next).id, football.id);
   assert.deepEqual(activeEvent(next).score, football.score);
   assert.ok(next.events.every(({ name }) => name !== '篮球'));
@@ -209,7 +209,7 @@ test('upgrading old overlay layouts moves the intro and winner cards and drops r
   assert.deepEqual(fixed.graphics.modules.results, defaultLayout('results'));
   assert.equal(fixed.graphics.modules.athlete, undefined);
   assert.deepEqual(next.standby.modules.lineup, defaultLayout('lineup'));
-  assert.equal(next.version, 9);
+  assert.equal(next.version, 10);
 });
 
 test('sketch layouts migrate only unchanged defaults and preserve operator adjustments', () => {

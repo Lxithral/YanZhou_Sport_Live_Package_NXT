@@ -217,8 +217,14 @@ function applyLayout() {
   if (!form || !state) return;
   const data = new FormData(form);
   const patch = Object.fromEntries(['x', 'y', 'scale', 'opacity', 'enter', 'exit', 'duration'].map((attr) => [attr, data.get(attr)]));
-  const { eventId, key } = { eventId: state.activeEventId, key: layoutKey };
-  run('module:save', { eventId, key, patch }).then(() => {
+  const eventId = state.activeEventId;
+  const key = layoutKey;
+  const cornerInput = form.querySelector('[name="corner"]');
+  const meet = state.meet;
+  const saveCorner = cornerInput && meet
+    ? run('meet:save', { eventId, title: meet.title, subtitle: meet.subtitle, accent: meet.accent, corner: cornerInput.value })
+    : Promise.resolve();
+  saveCorner.then(() => run('module:save', { eventId, key, patch })).then(() => {
     if (state.activeEventId !== eventId || layoutKey !== key) return;
     layoutDirty = false;
     layoutModel = undefined;
@@ -341,6 +347,12 @@ document.addEventListener('click', async (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target?.name === 'corner') {
+    e.preventDefault();
+    clearTimeout(layoutSaveTimer);
+    applyLayout();
+    return;
+  }
   if (e.key === 'Enter' && e.target?.id === 'champion-mark') {
     e.preventDefault();
     void pushChampion();

@@ -14,7 +14,7 @@ function bottomRightCorner(width, height) {
 }
 
 export const BRANDING_CORNERS = {
-  br: bottomRightCorner(110, 110),
+  br: bottomRightCorner(110, 142),
 };
 
 export function brandingMode(query) {
@@ -63,7 +63,11 @@ export function mountBrandCorners(stage) {
       node.style[property] = `${pixels}px`;
     }
     node.innerHTML = cornerMarkup[key];
+    const caption = stage.ownerDocument.createElement('span');
+    caption.className = 'branding-corner-text';
+    caption.hidden = true;
+    node.append(caption);
     stage.append(node);
-    return { node, box };
+    return { node, box, caption };
   });
 }

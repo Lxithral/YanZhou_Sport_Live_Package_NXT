@@ -28,6 +28,19 @@
   filter: drop-shadow(0 2px 2px #2b140e) drop-shadow(0 3px 6px #26130ebb);
 }
 
+.branding-corner-text {
+  margin-top: 6px;
+  align-self: center;
+  color: #f3d9a4;
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: .16em;
+  text-indent: .16em;
+  text-align: center;
+  white-space: nowrap;
+  text-shadow: 0 2px 4px #2b140ecc, 0 1px 0 #2b140e;
+}
+
 .branding-preview {
   background: #12161b !important;
 }

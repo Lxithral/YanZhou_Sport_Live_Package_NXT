@@ -29,7 +29,7 @@ test('school schedule keeps only the four 800 m finals while the other events st
   assert.ok(SCHOOL_RACES.every(({ schedule }) => schedule.project === 'run-800' && schedule.start));
   assert.equal(checkInTime(timed[0].schedule.start), '13:50');
   assert.equal(SCHOOL_RACES.filter((event) => event.schedule.round === 'heat').length, 0);
-  assert.equal(verifyState(initialState()).version, 9);
+  assert.equal(verifyState(initialState()).version, 10);
 });
 
 test('upgrade removes empty generic presets and retains actual registrations and the current school race', () => {
@@ -40,7 +40,7 @@ test('upgrade removes empty generic presets and retains actual registrations and
   const registered = { ...structuredClone(preset), id: 'run-800-women', division: 'women', competitors: app.event.competitors };
   const old = { ...app.state, version: 4, events: [blank, registered, ...app.state.events] };
   const updated = verifyState(migrateState(verifyState(old)));
-  assert.equal(updated.version, 9);
+  assert.equal(updated.version, 10);
   assert.equal(updated.activeEventId, old.activeEventId);
   assert.deepEqual(updated.events, [registered, ...app.state.events]);
   const previousActive = verifyState(migrateState({ ...old, activeEventId: blank.id }));

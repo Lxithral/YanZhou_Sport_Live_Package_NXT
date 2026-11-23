@@ -16,6 +16,8 @@ const PATHS = {
   close: 'M6 6l12 12M18 6L6 18',
   trophy: 'M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4zM7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3',
   down: 'M6 9l6 6 6-6',
+  eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
+  'eye-off': 'M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.7M6.1 6.6A16.6 16.6 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 3.6-.7',
 };
 
 export function icon(key) {
@@ -144,7 +146,7 @@ export function moduleList(state, event, selected) {
       const pages = event && ['lineup', 'results'].includes(key) ? paginatedCount(event, key) : 1;
       return `<article class="module-card${live ? ' live' : ''}${selected === key ? ' active' : ''}">
         <span class="module-tally" aria-hidden="true"></span>
-        <button type="button" class="module-toggle" data-action="module-toggle" data-key="${key}" aria-pressed="${layout.visible}" aria-label="${layout.visible ? '隐藏' : '显示'}${h(meta.title)}" title="${layout.visible ? '隐藏' : '显示'}${h(meta.title)}" ${allowed ? '' : 'disabled'}><span class="switch-track"><span class="switch-thumb"></span></span></button>
+        <button type="button" class="module-toggle" data-action="module-toggle" data-key="${key}" aria-pressed="${layout.visible}" aria-label="${layout.visible ? '隐藏' : '显示'}${h(meta.title)}" title="${layout.visible ? '隐藏' : '显示'}${h(meta.title)}" ${allowed ? '' : 'disabled'}>${layout.visible ? '隐藏' : '显示'}</button>
         <button type="button" class="module-item" data-action="module-select" data-key="${key}" aria-pressed="${selected === key}" aria-label="选中${h(meta.title)}">
           <span class="module-main">
             <span class="module-title">${h(meta.title)}</span>
@@ -213,7 +215,7 @@ export function inspector({ state, key, collapsed = new Set() }) {
     <div class="card-head"><h3>布局微调</h3><span class="tag">${h(meta.title)}</span></div>
     <div class="visibility-row${layout.visible ? ' on' : ''}">
       <span class="visibility-copy"><strong>${layout.visible ? '画面中' : '未上屏'}</strong><small>${layout.visible ? '点击可立即隐藏' : '点击后出现在输出画面'}</small></span>
-      <button type="button" class="switch" data-action="module-toggle" data-key="${key}" aria-pressed="${layout.visible}" aria-label="${layout.visible ? '隐藏' : '显示'}${h(meta.title)}"><span></span></button>
+      ${button(layout.visible ? '隐藏' : '显示', { action: 'module-toggle', key, glyph: layout.visible ? 'eye-off' : 'eye', variant: layout.visible ? '' : 'capture', accessible: `${layout.visible ? '隐藏' : '显示'}${meta.title}` })}
     </div>
     ${section('position', '01', '位置', `
       <div class="field-grid">
@@ -231,6 +233,11 @@ export function inspector({ state, key, collapsed = new Set() }) {
         <label class="field"><span>退场动画</span><select name="exit">${Object.entries(MOTIONS).map(([value, label]) => `<option value="${value}" ${layout.exit === value ? 'selected' : ''}>${h(label)}</option>`).join('')}</select></label>
         <div class="field field-wide">${range('duration', '动画时长', layout.duration, 80, 2000, 'ms')}</div>
       </div>`, !collapsed.has('motion'))}
+    ${key === 'brand' ? section('corner', '04', '右下角角标', `
+      <div class="field-grid">
+        <label class="field field-wide"><span>角标文字</span><input name="corner" maxlength="12" value="${h(state.meet.corner ?? '')}" placeholder="如 中山市烟洲中学"></label>
+      </div>
+      <p class="form-note">显示在右下角金色标志的下方，留空则不显示。</p>`, !collapsed.has('corner')) : ''}
     <p class="form-note">所有设置调整后立即生效，也可以直接在监看里拖动已上屏的图层。</p>
   </form>`;
 }

@@ -49,20 +49,35 @@ html, body, #stage { background: transparent !important; }
 }
 
 .event-banner {
+  position: relative;
   display: flex;
   align-items: stretch;
   height: 112px;
   overflow: hidden;
-  border: 1px solid #e8c08a3b;
-  border-radius: 16px;
-  background: radial-gradient(130% 150% at 0% 50%, #3a2a22 0%, #251b1a 48%, #1a1416 100%);
-  box-shadow: 0 18px 40px #00000066, inset 0 1px 0 #ffffff14;
-  color: #fff7ec;
+  border: 3px solid var(--wine);
+  border-radius: 8px;
+  background: linear-gradient(105deg, var(--paper-light), var(--paper));
+  box-shadow: 0 0 0 1px #e6c08ab3, 0 16px 34px #200b1940;
+  color: var(--ink);
 }
-.eb-rule { flex: none; width: 8px; background: linear-gradient(180deg, #f3c791, var(--accent) 58%, #8a5628); }
-.eb-copy { display: grid; align-content: center; gap: 4px; min-width: 0; flex: 1; padding: 0 26px 0 24px; }
-.eb-copy strong { font-size: 48px; line-height: 1.04; font-weight: 840; letter-spacing: .015em; text-shadow: 0 2px 12px #00000059; }
-.eb-copy small { color: #cbb2a1; font-size: 22px; font-weight: 600; letter-spacing: .08em; }
+.event-banner::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 92px;
+  height: 92px;
+  transform: translateY(-50%);
+  background: var(--seal) no-repeat center / contain;
+  opacity: .12;
+  pointer-events: none;
+}
+.eb-rule { position: relative; flex: none; width: 15px; background: linear-gradient(180deg, var(--wine), var(--wine-dark)); }
+.eb-rule::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 3px; background: var(--accent); }
+.eb-copy { display: grid; align-content: center; gap: 4px; min-width: 0; flex: 1; padding: 0 120px 0 22px; }
+.eb-copy strong { font-size: 46px; line-height: 1.04; font-weight: 800; letter-spacing: .02em; color: var(--ink); }
+.eb-copy small { color: #8a4c4f; font-size: 21px; font-weight: 650; letter-spacing: .1em; }
+.eb-copy small::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 10px; transform: rotate(45deg); background: #c8924f; vertical-align: 2px; }
 
 .score-ribbon {
   display: grid;

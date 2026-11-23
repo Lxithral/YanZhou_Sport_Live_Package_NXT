@@ -9,7 +9,7 @@ import { AWARD_LIMIT, SCHOOL_RACES, canScore, className, classStandings, finalFo
 const LEGACY_PRESET_IDS = new Set(['run-1000', 'run-800', 'run-100', 'relay-100', 'long-jump', 'shot-put', 'run-1500']
   .flatMap((id) => [id, `${id}-women`]));
 const LEGACY_DEFAULT_ORIGINS = { brand: [48, 34], event: [48, 931], score: [1212, 34] };
-const STATE_VERSION = 9;
+const STATE_VERSION = 10;
 const BOARD_KEYS = ['lineup', 'results'];
 const TABLE_KEYS = [...BOARD_KEYS, 'teams'];
 const SPECIAL = ['DNS', 'DNF', 'DQ', 'NM'];
@@ -46,7 +46,7 @@ function scoreStart() {
 
 function defaultGraphics() {
   return {
-    meet: { title: '烟洲体育', subtitle: '', accent: '#f5c84b' },
+    meet: { title: '烟洲体育', subtitle: '', accent: '#f5c84b', corner: '中山市烟洲中学' },
     modules: Object.fromEntries(Object.keys(MODULES).map((key) => [key, defaultLayout(key)])),
     pages: { lineup: 0, results: 0 },
   };
@@ -67,6 +67,7 @@ export function initialState() {
 
 function validGraphics(config, version) {
   return typeof config?.meet?.title === 'string' && typeof config.meet.subtitle === 'string' && /^#[0-9a-f]{6}$/i.test(config.meet.accent) &&
+    (config.meet.corner === undefined || typeof config.meet.corner === 'string') &&
     object(config.pages) &&
     Object.keys(MODULES).every((key) => {
       if (key === 'teams' && version < 4) return true;
@@ -200,6 +201,11 @@ function migrateIntroLayouts(graphics, version) {
   return { ...graphics, modules };
 }
 
+function addCornerText(graphics) {
+  if (graphics.meet.corner !== undefined) return graphics;
+  return { ...graphics, meet: { ...graphics.meet, corner: '中山市烟洲中学' } };
+}
+
 function pruneModules(graphics) {
   // 只保留当前仍在使用的模块，旧版本留下的人物条、公告等布局在这里清掉。
   const modules = Object.fromEntries(Object.keys(MODULES).map((key) => [key, graphics.modules?.[key] ?? defaultLayout(key)]));
@@ -211,7 +217,7 @@ export function migrateState(state) {
   const { events, activeEventId, standby } = state.version < 5 ? migrateSchoolEvents(state) : state;
   const timingDropped = state.version < 7;
   const upgrade = (graphics) => {
-    const positioned = migrateIntroLayouts(graphics, state.version);
+    const positioned = migrateIntroLayouts(addCornerText(graphics), state.version);
     return pruneModules(state.version < 8 ? migrateDefaultPositions(positioned) : positioned);
   };
   return {
@@ -553,9 +559,9 @@ const commands = {
     requireThat(event, '请先选择赛事。');
     pages[key] = integer(page, 0, paginatedCount(event, key) - 1, '页码');
   },
-  'meet:save'(state, { title, subtitle, accent, eventId }) {
+  'meet:save'(state, { title, subtitle, accent, corner, eventId }) {
     requireThat(typeof accent === 'string' && /^#[0-9a-f]{6}$/i.test(accent), '请选择有效的包装强调色。');
-    graphicsForActive(state, eventId).meet = { title: text(title, 20, '榜单页脚', true), subtitle: text(subtitle, 24, '挂角副标题'), accent };
+    graphicsForActive(state, eventId).meet = { title: text(title, 20, '榜单页脚', true), subtitle: text(subtitle, 24, '挂角副标题'), accent, corner: text(corner, 12, '角标文字') };
   },
   'modules:brand-only'(state, { eventId }) {
     const graphics = graphicsForActive(state, eventId);
