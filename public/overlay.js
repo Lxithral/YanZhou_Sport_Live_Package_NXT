@@ -83,13 +83,20 @@ function championGraphic(event) {
   const winner = standings(event).find((row) => row.rank === 1);
   const name = winner?.athlete.name || '等待冠军';
   const time = winner ? resultText(winner.athlete, event) : '—';
-  const nameSize = Math.min(64, Math.max(24, Math.floor(272 / [...name].length)));
-  const timeSize = Math.min(46, Math.max(22, Math.floor(260 / (time.length * .62))));
-  return `<div class="winner-card" aria-label="第一名">
+  const team = winner?.athlete.team ? teamLabel(event, winner.athlete) : '';
+  const nameLength = [...name].length;
+  const teamLength = [...team].length;
+  const nameLimit = nameLength <= 4 ? 72 : teamLength > 26 ? 46 : 56;
+  const nameSize = Math.min(nameLimit, Math.max(28, Math.floor(280 / Math.ceil(nameLength / 2))));
+  const teamSize = Math.min(30, Math.max(22, Math.floor(280 / Math.min(teamLength || 1, 14))));
+  const timeSize = Math.min(54, Math.max(22, Math.floor(280 / (time.length * .62))));
+  return `<div class="winner-card" aria-label="冠军">
     <div class="winner-crown">冠军</div>
     <div class="winner-body">
       <strong class="winner-name" style="--name-size: ${nameSize}px">${h(name)}</strong>
-      <span class="winner-rule" aria-hidden="true"></span>
+      ${team ? `<span class="winner-team" style="--team-size: ${teamSize}px">${h(team)}</span>` : ''}
+    </div>
+    <div class="winner-result">
       <span class="winner-time" style="--time-size: ${timeSize}px">${h(time)}</span>
     </div>
   </div>`;
@@ -132,7 +139,15 @@ function sportsGraphic(key, event) {
       const group = event.kind === 'track' && heats(event).length > 1 ? `第 ${event.heat ?? 1} 组` : '';
       const grade = event.schedule?.grade;
       const context = [grade === 'staff' ? '' : GRADES[grade], event.stage, group].filter(Boolean).join(' · ');
-      return `<div class="event-banner"><span class="eb-tag">${h(KINDS[event.kind] ?? '赛事')}</span><div class="eb-copy"><strong>${h(event.name)}</strong><small>${h(context)}</small></div></div>`;
+      const titleSize = Math.min(54, Math.max(22, Math.floor(440 / Math.min([...event.name].length, 20))));
+      const contextSize = Math.min(26, Math.max(18, Math.floor(440 / ([...context].length || 1))));
+      return `<div class="event-banner">
+        <span class="eb-tag">${h(KINDS[event.kind] ?? '赛事')}</span>
+        <div class="eb-copy">
+          <strong style="--title-size: ${titleSize}px">${h(event.name)}</strong>
+          ${context ? `<small style="--context-size: ${contextSize}px">${h(context)}</small>` : ''}
+        </div>
+      </div>`;
     }
     // case 'score': 球赛记分牌先不用。
     // case 'teams': 班级积分榜先不用。

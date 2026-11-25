@@ -90,9 +90,9 @@ try {
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
     return result.result.value;
   };
-  const screenshot = async name => {
+  const screenshot = async (name, clip) => {
     await pause(320);
-    const shot = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+    const shot = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, ...(clip ? { clip } : {}) });
     await writeFile(path.join(artifacts, name), Buffer.from(shot.data, 'base64'));
     report.screenshots.push(name);
   };
@@ -108,13 +108,49 @@ try {
   const type = (selector, value) => evaluate('(() => { const node = document.querySelector(' + JSON.stringify(selector) + '); node.focus(); node.value = ' + JSON.stringify(value) + '; node.dispatchEvent(new Event("input", {bubbles: true})); return true; })()');
   const submit = selector => evaluate('document.querySelector(' + JSON.stringify(selector) + ').requestSubmit()');
   const click = selector => evaluate('document.querySelector(' + JSON.stringify(selector) + ').click()');
+  const pointerClick = async selector => {
+    const point = await evaluate('(() => { const node = document.querySelector(' + JSON.stringify(selector) + '); node.scrollIntoView({block:"nearest"}); const rect = node.getBoundingClientRect(); return {x:rect.x+rect.width/2,y:rect.y+rect.height/2}; })()');
+    await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point });
+    await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...point });
+  };
+  const enter = async () => {
+    await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+    await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+  };
   const viewport = (width, height) => cdp('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  const sendCommand = (action, args) => new Promise((resolve, reject) => {
+    const socket = new WebSocket(base.replace(/^http/, 'ws') + '/ws?role=control', { origin: base });
+    const timeout = setTimeout(() => { socket.terminate(); reject(new Error('Command timeout ' + action)); }, 6000);
+    socket.once('open', () => socket.send(JSON.stringify({ type: 'command', id: 'ui-review', command: { action, ...args } })));
+    socket.once('error', error => { clearTimeout(timeout); reject(error); });
+    socket.on('message', raw => {
+      const message = JSON.parse(raw);
+      if (message.type !== 'result' || message.id !== 'ui-review') return;
+      clearTimeout(timeout);
+      socket.close();
+      if (message.ok) resolve();
+      else reject(new Error(message.error));
+    });
+  });
+  const checkGraphicText = async label => {
+    const fitted = await evaluate(`(() => {
+      const selectors = ['.winner-name', '.winner-team', '.winner-time', '.eb-copy strong', '.eb-copy small'];
+      return selectors.map(selector => {
+        const node = document.querySelector(selector);
+        if (!node) return { selector, fits: true };
+        const box = node.getBoundingClientRect();
+        const parent = node.parentElement.getBoundingClientRect();
+        return { selector, fits: box.left >= parent.left - .5 && box.right <= parent.right + .5 && box.top >= parent.top - .5 && box.bottom <= parent.bottom + .5 && node.scrollWidth <= node.clientWidth + 1 };
+      });
+    })()`);
+    assert.ok(fitted.every(({ fits }) => fits), label + ' ' + JSON.stringify(fitted));
+  };
 
   await cdp('Runtime.enable');
   await cdp('Page.enable');
   await viewport(1920, 1080);
   await cdp('Page.navigate', { url: base + '/control.html' });
-  await until('document.querySelector("#connection")?.classList.contains("connection--online") && document.querySelector("#roster-rows")?.textContent.includes("林浩宇")', 'control connected');
+  await until('document.querySelector("#connection")?.classList.contains("connection--online") && document.querySelector("#roster-seed-1-name")?.value === "林浩宇"', 'control connected');
 
   // 无头浏览器默认报告浅色系统主题，先固定成深色，保证截图可复现
   await click('[data-theme-option="dark"]');
@@ -122,25 +158,103 @@ try {
   assert.equal(await evaluate('document.querySelectorAll("#module-list .module-card").length'), 4, 'four layer cards');
   if (await evaluate('CSS.supports("appearance", "base-select")')) {
     assert.equal(await evaluate('document.querySelector(".intro-controls .select-display") !== null'), true, 'themed select trigger rendered');
+    await pointerClick('.intro-controls select');
+    await until('document.querySelector(".intro-controls select").matches(":open")', 'intro picker opened');
+    const picker = await evaluate(`(() => {
+      const select = document.querySelector('.intro-controls select');
+      const box = select.getBoundingClientRect();
+      const option = select.querySelector('option').getBoundingClientRect();
+      const style = getComputedStyle(select, '::picker(select)');
+      return {
+        selectWidth: box.width, selectLeft: box.left, selectRight: box.right,
+        pickerWidth: style.width,
+        pickerLeft: option.left - parseFloat(style.paddingLeft) - parseFloat(style.borderLeftWidth),
+        pickerRight: option.right + parseFloat(style.paddingRight) + parseFloat(style.borderRightWidth),
+      };
+    })()`);
+    await screenshot('control-intro-picker.png');
+    assert.ok(Math.abs(parseFloat(picker.pickerWidth) - picker.selectWidth) <= 1, 'picker matches select width ' + JSON.stringify(picker));
+    assert.ok(Math.abs(picker.pickerLeft - picker.selectLeft) <= 1, 'picker matches select left edge ' + JSON.stringify(picker));
+    assert.ok(Math.abs(picker.pickerRight - picker.selectRight) <= 1, 'picker matches select right edge ' + JSON.stringify(picker));
+    await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    report.checks.push('The intro picker aligns with both edges of its select.');
   }
   report.checks.push('The roster lists the seeded athletes and the layer cards render in the output column.');
 
-  // 1) 冠军流程：点冠军 → 行下展开成绩栏（不上屏）→ 推送成绩 → 点显示上屏。
-  await click('[data-action="champion"]');
-  await until('document.querySelector("#champion-mark") !== null && document.querySelector(\'[data-action="champion"]\')?.getAttribute("aria-pressed") === "true"', 'champion pane opened');
-  assert.equal(await evaluate('document.querySelector(\'[data-action="module-toggle"][data-key="results"]\').getAttribute("aria-pressed")'), 'false', 'champion click does not go on air');
-  await screenshot('control-champion-pane.png');
-  await type('#champion-mark', '2:05.00');
-  await click('[data-action="champion-push"]');
-  await until('document.querySelector(\'[data-action="champion-show"]\') !== null', 'show button appears after push');
-  await click('[data-action="champion-show"]');
+  // 名单行加高，姓名、班级、道次和成绩直接录入。
+  assert.ok(await evaluate('document.querySelector("#roster-rows tr[data-athlete]").getBoundingClientRect().height >= 84'), 'athlete row has room for direct editing');
+  assert.ok(await evaluate('document.querySelector("#properties-column").getBoundingClientRect().width <= 310'), 'output column narrowed');
+  await type('#roster-seed-1-result', '2:06.00');
+  await enter();
+  await until('document.querySelector("#roster-seed-1-result")?.value === "02:06.00"', 'score saved with enter');
+  await type('#roster-seed-2-result', '2:10.00');
+  await evaluate('document.querySelector("#roster-seed-2-result").setSelectionRange(2,2)');
+  await click('[data-action="module-toggle"][data-key="event"]');
+  await until('document.querySelector(\'[data-action="module-toggle"][data-key="event"]\').getAttribute("aria-pressed") === "false"', 'event layer off');
+  assert.equal(await evaluate('document.querySelector("#roster-seed-2-result").value'), '2:10.00', 'draft survives live refresh');
+  assert.equal(await evaluate('document.activeElement.id'), 'roster-seed-2-result', 'focus survives live refresh');
+  assert.equal(await evaluate('document.activeElement.selectionStart'), 2, 'cursor survives live refresh');
+  await click('[data-action="module-toggle"][data-key="event"]');
+  await enter();
+  await until('document.querySelector("#roster-seed-2-result")?.value === "02:10.00"', 'second score saved');
+  await type('#roster-seed-2-result', '2:11.00');
+  await evaluate(`(() => {
+    const input = document.querySelector('#roster-seed-2-result');
+    input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
+    input.value = '02:10.00';
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+  })()`);
+  await until('document.querySelector("#roster-seed-2-result")?.dataset.original === "02:11.00"', 'first rapid edit saved');
+  assert.equal(await evaluate('document.querySelector("#roster-seed-2-result").value'), '02:10.00', 'editing back during a save retains the latest value');
+  await enter();
+  await until('document.querySelector("#roster-seed-2-result")?.dataset.original === "02:10.00"', 'latest rapid edit saved');
+  await type('#roster-seed-2-team', '高一2班');
+  await evaluate('document.activeElement.blur()');
+  await until('document.querySelector("#roster-seed-2-team")?.dataset.original === "高一2班"', 'class saved on blur');
+  const stored = JSON.parse(await readFile(path.join(temporary, 'settings.json'), 'utf8'));
+  const savedAthlete = stored.events.find(event => event.id === race.id).competitors.find(row => row.id === 'seed-2');
+  assert.equal(savedAthlete.time, 130000);
+  assert.equal(savedAthlete.bib, '102');
+  assert.equal(savedAthlete.heat, 1);
+  await type('#roster-seed-3-result', '错误成绩');
+  await enter();
+  await until('document.querySelector("#roster-feedback-seed-3")?.classList.contains("error")', 'invalid result feedback');
+  assert.equal(await evaluate('document.querySelector("#roster-seed-3-result").value'), '错误成绩', 'invalid draft retained');
+  await type('#roster-seed-3-result', 'DNF');
+  await enter();
+  await until('document.querySelector("#roster-seed-3-result")?.dataset.original === "DNF"', 'result status saved');
+  await type('#roster-seed-3-result', '错误成绩');
+  await evaluate(`(() => {
+    const input = document.querySelector('#roster-seed-3-result');
+    input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
+    input.value = 'DNF';
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+    input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));
+  })()`);
+  await until('document.querySelector("#roster-feedback-seed-3")?.textContent === ""', 'rapid correction saved after a rejected input');
+  report.checks.push('Scores save with Enter or blur, invalid drafts show an inline error, and live refresh preserves editing.');
+
+  // 冠军按钮先保存本行输入，再直接上屏。
+  await type('#roster-seed-1-result', '2:05.00');
+  await pointerClick('[data-action="champion"][data-key="seed-1"]');
   await until('document.querySelector("#preview").contentDocument?.querySelector(".winner-name")?.textContent.includes("林浩宇")', 'champion card shows the athlete');
   assert.equal(await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".winner-time")?.textContent'), '02:05.00');
   assert.equal(await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".winner-crown")?.textContent.includes("冠军")'), true, 'crown band on the champion card');
   await screenshot('control-champion.png');
   assert.equal(await evaluate('document.querySelector(\'[data-action="module-toggle"][data-key="results"]\').getAttribute("aria-pressed")'), 'true', 'champion layer on air after show');
   assert.equal(await evaluate('document.querySelector("#layer-count").textContent'), '上屏 3 / 4');
-  report.checks.push('Champion flow: pick the athlete, push the score in the inline pane, then show the champion card.');
+  assert.equal(await evaluate('document.querySelector("dialog, .champion-pane, #champion-mark")'), null, 'roster actions have no secondary editor');
+  await until('!document.querySelector(\'[data-action="champion"][data-key="seed-1"]\').disabled', 'champion button ready');
+  await pointerClick('[data-action="champion"][data-key="seed-2"]');
+  await until('document.querySelector("#preview").contentDocument?.querySelector(".winner-name")?.textContent.includes("陈子航")', 'champion switches directly');
+  await until('!document.querySelector(\'[data-action="champion"][data-key="seed-2"]\').disabled', 'champion switch complete');
+  await pointerClick('[data-action="champion"][data-key="seed-2"]');
+  await until('document.querySelector(\'[data-action="module-toggle"][data-key="results"]\').getAttribute("aria-pressed") === "false"', 'champion hidden directly');
+  await until('!document.querySelector(\'[data-action="champion"][data-key="seed-1"]\').disabled', 'champion hide complete');
+  await pointerClick('[data-action="champion"][data-key="seed-1"]');
+  await until('document.querySelector("#preview").contentDocument?.querySelector(".winner-name")?.textContent.includes("林浩宇") && document.querySelector(\'[data-action="module-toggle"][data-key="results"]\').getAttribute("aria-pressed") === "true"', 'champion restored directly');
+  report.checks.push('Champion buttons save the row and directly publish, switch or hide the card.');
 
   // 2) 图层开关：起跑介绍上屏会替换冠军卡，下屏后回到 Logo。
   await click('[data-action="module-toggle"][data-key="lineup"]');
@@ -178,15 +292,21 @@ try {
   await type('#roster-form [name=name]', '测试选手');
   await type('#roster-form [name=result]', '2:10.00');
   await submit('#roster-form');
-  await until('document.querySelector("#roster-rows").textContent.includes("测试选手") && document.querySelector("#roster-rows").textContent.includes("02:10.00")', 'athlete added inline');
+  await until('[...document.querySelectorAll("#roster-rows tr[data-athlete]")].some(row => row.querySelector("[name=name]").value === "测试选手" && row.querySelector("[name=result]").value === "02:10.00")', 'athlete added inline');
   report.checks.push('Adding an athlete happens inline and the score can be typed into the form.');
   await screenshot('control-roster.png');
+  const addedId = await evaluate('[...document.querySelectorAll("#roster-rows tr[data-athlete]")].find(row => row.querySelector("[name=name]").value === "测试选手").dataset.athlete');
+  await pointerClick('[data-action="athlete-delete"][data-key="' + addedId + '"]');
+  await until('document.querySelector(\'[data-athlete="' + addedId + '"]\') === null', 'athlete deleted directly');
+  assert.equal(await evaluate('document.querySelector("dialog")'), null, 'delete has no confirmation dialog');
+  report.checks.push('Each athlete can be deleted directly from the roster row.');
 
   // 5) 尺寸自适应。
   await click('[data-action="workspace"][data-key="work"]');
   await viewport(1366, 768);
   await screenshot('control-laptop.png');
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+  assert.ok(await evaluate('document.querySelector("#properties-column").getBoundingClientRect().width < 270'), 'laptop output column narrowed');
   report.checks.push('1366x768 keeps the workspace on screen without horizontal scroll.');
   await viewport(1100, 800);
   await screenshot('control-tablet.png');
@@ -196,6 +316,12 @@ try {
   await viewport(390, 844);
   await screenshot('control-mobile-work.png');
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+  assert.ok(await evaluate('[...document.querySelectorAll("#roster-rows tr[data-athlete] input, #roster-rows tr[data-athlete] button")].every(node => { const box = node.getBoundingClientRect(); const cell = node.closest("td").getBoundingClientRect(); return box.left >= cell.left && box.right <= cell.right; })'), 'mobile row controls fit their cells');
+  await viewport(320, 700);
+  await pause(100);
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, '320px has no horizontal scroll');
+  assert.ok(await evaluate('[...document.querySelectorAll("#roster-rows tr[data-athlete] input, #roster-rows tr[data-athlete] button")].every(node => { const box = node.getBoundingClientRect(); const cell = node.closest("td").getBoundingClientRect(); return box.left >= cell.left && box.right <= cell.right; })'), '320px row controls fit their cells');
+  await viewport(390, 844);
   await click('[data-action="workspace"][data-key="output"]');
   await screenshot('control-mobile-output.png');
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
@@ -223,6 +349,64 @@ try {
   await until('document.documentElement.dataset.theme === "dark"', 'dark theme applied');
   assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(13, 14, 16)');
   report.checks.push('Theme switch flips between light and dark and persists the choice.');
+
+  // 赛事条和冠军卡按实际输出检查文字、尺寸和透明背景。
+  const savedState = JSON.parse(await readFile(path.join(temporary, 'settings.json'), 'utf8'));
+  const reviewEvent = savedState.events.find(event => event.schedule?.grade === 'g2' && event.division === 'men');
+  await sendCommand('event:select', { eventId: reviewEvent.id });
+  await sendCommand('athlete:save', { eventId: reviewEvent.id, fields: { name: '张三', team: '高二2班', result: '3.13' } });
+  const reviewState = JSON.parse(await readFile(path.join(temporary, 'settings.json'), 'utf8'));
+  const reviewWinner = activeEvent(reviewState).competitors.find(athlete => athlete.name === '张三');
+  await sendCommand('rank:champion', { eventId: reviewEvent.id, id: reviewWinner.id });
+  await sendCommand('module:save', { eventId: reviewEvent.id, key: 'results', patch: { visible: true } });
+  await until('document.querySelector("#preview").contentDocument?.querySelector(".winner-team")?.textContent === "高二2班"', 'champion class displayed');
+  await screenshot('control-graphics.png');
+
+  await cdp('Page.navigate', { url: base + '/overlay.html' });
+  await until('document.querySelector(".winner-name")?.textContent === "张三"', 'output graphics connected');
+  assert.equal(await evaluate('document.querySelector(".winner-time").textContent'), '00:03.13');
+  assert.equal(await evaluate('document.querySelector(".winner-team").textContent'), '高二2班');
+  assert.equal(await evaluate('document.querySelector(".winner-card").getBoundingClientRect().height'), 400);
+  assert.equal(await evaluate('document.querySelector(".event-banner").getBoundingClientRect().height'), 112);
+  assert.ok(await evaluate('[document.documentElement, document.body, document.querySelector("#stage")].every(node => getComputedStyle(node).backgroundColor === "rgba(0, 0, 0, 0)")'), 'output background is transparent');
+  await cdp('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
+  await screenshot('overlay-graphics.png', { x: 96, y: 516, width: 1728, height: 520, scale: 1 });
+  report.checks.push('The event banner and champion card show the class and score on transparent 1080p output.');
+
+  const mediumName = '阿卜杜勒·穆罕默德';
+  await sendCommand('athlete:save', { eventId: reviewEvent.id, id: reviewWinner.id, fields: { name: mediumName, team: '高二2班', result: '3.13' } });
+  await until('document.querySelector(".winner-name")?.textContent === ' + JSON.stringify(mediumName), 'medium-length champion name rendered');
+  await screenshot('overlay-medium-name.png');
+  assert.ok(await evaluate('parseFloat(getComputedStyle(document.querySelector(".winner-name")).fontSize) >= 44'), 'medium-length champion name remains readable');
+  await checkGraphicText('medium-length name fits');
+  await viewport(861, 485);
+  await until('document.querySelector("#stage").getBoundingClientRect().width < 900', 'output scaled to preview size');
+  assert.ok(await evaluate('document.querySelector(".winner-name").getBoundingClientRect().height >= 40'), 'two-line name is readable in the reduced preview');
+  assert.ok(await evaluate('document.querySelector(".winner-team").getBoundingClientRect().height >= 14'), 'class is readable in the reduced preview');
+  assert.ok(await evaluate('document.querySelector(".winner-time").getBoundingClientRect().height >= 22'), 'score is readable in the reduced preview');
+  await checkGraphicText('reduced preview text fits');
+  await screenshot('overlay-reduced-preview.png');
+  await viewport(1920, 1080);
+  await until('document.querySelector("#stage").getBoundingClientRect().width === 1920', 'full-size output restored');
+  await sendCommand('athlete:save', { eventId: reviewEvent.id, id: reviewWinner.id, fields: { name: mediumName, team: '班'.repeat(35), result: '3.13' } });
+  await until('document.querySelector(".winner-team")?.textContent.length === 35', 'long class paired with the name');
+  await checkGraphicText('medium-length name with a long class fits');
+  report.checks.push('Medium-length champion names keep a readable size across two balanced lines.');
+  report.checks.push('Names, classes and scores remain readable in an 861px preview.');
+
+  const longName = '选'.repeat(30);
+  const longTeam = '班'.repeat(35);
+  const longTitle = '项目'.repeat(14);
+  await sendCommand('athlete:save', { eventId: reviewEvent.id, id: reviewWinner.id, fields: { name: longName, team: longTeam, result: '86400' } });
+  await sendCommand('event:save', { id: reviewEvent.id, fields: { ...reviewEvent, name: longTitle, stage: '决赛轮次'.repeat(6) } });
+  await until('document.querySelector(".winner-name")?.textContent === ' + JSON.stringify(longName) + ' && document.querySelector(".eb-copy strong")?.textContent === ' + JSON.stringify(longTitle), 'long overlay text rendered');
+  assert.equal(await evaluate('document.querySelector(".winner-time").textContent'), '1440:00.00');
+  assert.equal(await evaluate('document.querySelector(".winner-team").textContent'), longTeam);
+  await checkGraphicText('long names, titles and scores fit');
+  await screenshot('overlay-long-text.png');
+  await sendCommand('athlete:save', { eventId: reviewEvent.id, id: reviewWinner.id, fields: { name: '张三', team: '高二2班', result: '' } });
+  await until('document.querySelector(".winner-time")?.textContent === "—"', 'empty score displayed');
+  report.checks.push('Maximum-length names, classes, event titles and scores fit their graphics, including an empty score.');
 
   assert.deepEqual(errors, [], 'no uncaught browser exceptions');
   report.checks.push('No uncaught browser exceptions.');

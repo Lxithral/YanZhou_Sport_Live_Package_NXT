@@ -1,8 +1,7 @@
 import { SportsClient, pageUrl } from './client.js';
-import { Dialogs } from './control-dialogs.js';
 import { athleteFields, athleteForm, competitorPanel, inspector, moduleList, pager, rosterTools } from './control-views.js';
 import { onProgram } from './meet-program.js';
-import { MODULES, activeEvent, applicable, clamp, eventTitle, formatTime, moduleBounds, standings } from './sport.js';
+import { MODULES, activeEvent, applicable, clamp, eventTitle, moduleBounds, roster, standings } from './sport.js';
 
 const $ = (selector) => document.querySelector(selector);
 const workspace = $('.app-shell');
@@ -13,12 +12,17 @@ const layoutPane = $('#layout-inspector');
 const rosterView = { page: 0, limit: 6 };
 const HIDDEN_LAYERS = ['teams', 'score'];
 const regionMarkup = new WeakMap();
+const rosterDrafts = new Map();
+const rosterSaves = new Map();
+const rosterDeleting = new Set();
+const SPECIAL_RESULTS = new Set(['DNS', 'DNF', 'DQ', 'NM']);
 let state;
 let switchingFocus = false;
 let renderedEventId;
 let renderedRosterId;
-let rosterEditing = null;
-let championPane = null; // { id, pushed } 冠军成绩填写栏
+let addingAthlete = false;
+let championBusy = false;
+let refreshingRoster = false;
 let toastTimer;
 let layoutKey = 'brand';
 // 布局面板默认只展开「位置」，外观与出场/退场收起，避免面板过长
@@ -47,8 +51,6 @@ const client = new SportsClient({
   },
 });
 
-const dialogs = new Dialogs(async (action, args) => { await run(action, args); });
-
 function notify(text, failure = false) {
   const toast = $('#toast');
   toast.textContent = text;
@@ -69,14 +71,19 @@ function updateRegion(selector, markup) {
   const focus = document.activeElement;
   const action = node.contains(focus) ? focus.dataset.action : null;
   const focusId = node.contains(focus) ? focus.id : null;
+  const selection = focusId && Number.isInteger(focus.selectionStart)
+    ? { start: focus.selectionStart, end: focus.selectionEnd, direction: focus.selectionDirection }
+    : null;
   node.innerHTML = markup;
   regionMarkup.set(node, markup);
+  let next;
   if (action) {
     const targets = [...node.querySelectorAll(`[data-action="${CSS.escape(action)}"]:not(:disabled)`)];
     const sameKey = targets.filter((entry) => entry.dataset.key === focus.dataset.key);
-    const next = sameKey.find((entry) => entry.dataset.value === focus.dataset.value) ?? sameKey[0];
-    next?.focus({ preventScroll: true });
-  } else if (focusId) node.querySelector(`#${CSS.escape(focusId)}`)?.focus({ preventScroll: true });
+    next = sameKey.find((entry) => entry.dataset.value === focus.dataset.value) ?? sameKey[0];
+  } else if (focusId) next = node.querySelector(`#${CSS.escape(focusId)}`);
+  next?.focus({ preventScroll: true });
+  if (next && selection) next.setSelectionRange(selection.start, selection.end, selection.direction);
 }
 
 // 监看画布按 16:9 自适应
@@ -100,20 +107,30 @@ function renderRoster() {
   const event = activeEvent(state);
   if (event?.id !== renderedRosterId) {
     rosterView.page = 0;
-    if (rosterEditing === 'new') rosterEditing = null;
-    championPane = null;
+    addingAthlete = false;
+    rosterDrafts.clear();
   }
   renderedRosterId = event?.id;
-  if (championPane && !event?.competitors.some((athlete) => athlete.id === championPane.id)) championPane = null;
+  for (const id of rosterDrafts.keys()) {
+    if (!event?.competitors.some((athlete) => athlete.id === id)) rosterDrafts.delete(id);
+  }
   const total = Math.max(1, Math.ceil((event?.competitors.length ?? 0) / rosterView.limit));
   rosterView.page = clamp(rosterView.page, 0, total - 1);
   updateRegion('#roster-tools', rosterTools(event));
-  const editingAthlete = event?.competitors.find((athlete) => athlete.id === rosterEditing);
-  updateRegion('#roster-editor', event && (rosterEditing === 'new' || editingAthlete) ? athleteForm(event, editingAthlete) : '');
-  updateRegion('#roster-rows', competitorPanel(event, { start: rosterView.page * rosterView.limit, limit: rosterView.limit, pane: championPane }));
+  updateRegion('#roster-editor', event && addingAthlete ? athleteForm(event) : '');
+  refreshingRoster = true;
+  try {
+    updateRegion('#roster-rows', competitorPanel(event, {
+      start: rosterView.page * rosterView.limit,
+      limit: rosterView.limit,
+      drafts: rosterDrafts,
+      championBusy,
+      deleting: rosterDeleting,
+      resultsVisible: state.modules.results.visible,
+    }));
+  } finally { refreshingRoster = false; }
   updateRegion('#roster-pager', total > 1 ? pager('roster-page', rosterView.page, total, '选手名单') : '');
   $('#roster-rows').style.setProperty('--roster-count', String(event?.competitors.length ?? 0));
-  if (rosterEditing && !$('#roster-editor form')) rosterEditing = null;
 }
 
 // 可定制下拉：给原生 select 注入触发器，配合 appearance: base-select 渲染成深色菜单
@@ -250,89 +267,148 @@ document.querySelector('#roster-editor').addEventListener('submit', async (event
   if (!form) return;
   event.preventDefault();
   const eventId = form.dataset.event;
-  const id = form.dataset.athlete;
   const current = activeEvent(state);
-  const existing = id ? current?.competitors.find((athlete) => athlete.id === id) : undefined;
+  if (current?.id !== eventId) return;
   const data = new FormData(form);
-  const picks = (name) => String(data.get(name) ?? '').trim();
-  // 表单只填姓名、班级、道次、成绩，其余数据原样保留
-  const fields = athleteFields(current, existing, { name: picks('name'), team: picks('team'), lane: picks('lane') });
-  if (data.has('result')) {
-    const typed = picks('result');
-    const currentResult = existing?.time != null ? formatTime(existing.time, true) : '';
-    if (typed !== currentResult) { fields.result = typed; fields.status = ''; }
-  }
-  if (data.has('attempts')) fields.attempts = picks('attempts');
+  const changes = Object.fromEntries([...data].map(([name, value]) => [name, String(value).trim()]));
+  const fields = rosterSaveFields(current, undefined, changes);
+  const existingIds = new Set(current.competitors.map(({ id }) => id));
+  const submit = form.querySelector('[type="submit"]');
+  if (submit.disabled) return;
+  submit.disabled = true;
   try {
-    await run('athlete:save', { eventId, id: id || undefined, fields }, id ? '选手已更新' : '选手已添加');
-    rosterEditing = null;
-    renderRoster();
+    await run('athlete:save', { eventId, fields }, '选手已添加');
+    if (state.activeEventId === eventId) {
+      addingAthlete = false;
+      const index = roster(activeEvent(state)).findIndex(({ id }) => !existingIds.has(id));
+      if (index >= 0) rosterView.page = Math.floor(index / rosterView.limit);
+      renderRoster();
+    }
   } catch (error) {
     notify(error.message, true);
-  }
+  } finally { submit.disabled = false; }
 });
 
-// 冠军流程：点冠军 → 行下展开成绩栏 → 填成绩推送 → 点显示上屏
-async function pushChampion() {
-  if (!championPane || !state) return;
-  const event = activeEvent(state);
-  const athlete = event?.competitors.find((row) => row.id === championPane.id);
-  if (!athlete) return;
-  const input = $('#champion-mark');
-  const value = input ? input.value.trim() : '';
-  if (!value) { notify('先填成绩再推送。', true); input?.focus(); return; }
-  try {
-    if (event.kind === 'field') {
-      await run('athlete:attempt', { eventId: event.id, id: athlete.id, value, index: (athlete.attempts ?? []).length }, '成绩已推送');
-    } else {
-      await run('athlete:save', { eventId: event.id, id: athlete.id, fields: athleteFields(event, athlete, { result: value, status: '' }) }, '成绩已推送');
+function rosterSaveFields(event, athlete, changes) {
+  const overrides = { ...changes };
+  const scoreName = ['result', 'attempts', 'jumps'].find((name) => Object.hasOwn(overrides, name));
+  if (scoreName) {
+    overrides.status = '';
+    const status = overrides[scoreName].trim().toUpperCase();
+    if (SPECIAL_RESULTS.has(status)) {
+      delete overrides[scoreName];
+      overrides.result = status;
     }
-    championPane = { id: athlete.id, pushed: true };
-  } catch (error) {
-    notify(error.message, true);
-    return;
   }
-  renderRoster();
-  $('#champion-mark')?.focus();
+  return athleteFields(event, athlete, overrides);
 }
+
+function saveRosterRow(id, eventId) {
+  const key = `${eventId}:${id}`;
+  const pending = rosterSaves.get(key);
+  if (pending) {
+    return pending.promise.catch((error) => {
+      const latest = state.activeEventId === eventId ? rosterDrafts.get(id) : null;
+      const corrected = latest && Object.entries(pending.fields).some(([name, value]) => latest.fields[name] !== value);
+      if (!corrected) throw error;
+    }).then(() => saveRosterRow(id, eventId));
+  }
+  const event = state.events.find((row) => row.id === eventId);
+  const athlete = event?.competitors.find((row) => row.id === id);
+  const draft = state.activeEventId === eventId ? rosterDrafts.get(id) : null;
+  if (!athlete || !draft) return Promise.resolve();
+  const changes = { ...draft.fields };
+  const fields = rosterSaveFields(event, athlete, changes);
+  const job = run('athlete:save', { eventId, id, fields }).then(() => {
+    if (state.activeEventId !== eventId) return;
+    const current = rosterDrafts.get(id);
+    if (!current) return;
+    for (const [name, value] of Object.entries(changes)) {
+      if (current.fields[name] === value) delete current.fields[name];
+    }
+    current.error = '';
+    if (!Object.keys(current.fields).length) rosterDrafts.delete(id);
+  }).catch((error) => {
+    if (state.activeEventId === eventId && rosterDrafts.has(id)) rosterDrafts.get(id).error = error.message;
+    throw error;
+  }).finally(() => {
+    rosterSaves.delete(key);
+    renderRoster();
+  });
+  rosterSaves.set(key, { promise: job, fields: changes });
+  return job;
+}
+
+rosterContainer.addEventListener('input', ({ target }) => {
+  if (!target.matches('[data-roster-field]')) return;
+  const row = target.closest('[data-athlete]');
+  const id = row.dataset.athlete;
+  const draft = rosterDrafts.get(id) ?? { fields: {}, error: '' };
+  if (target.value.trim() === target.dataset.original && !rosterSaves.has(`${row.dataset.event}:${id}`)) delete draft.fields[target.name];
+  else draft.fields[target.name] = target.value;
+  draft.error = '';
+  const dirty = Object.keys(draft.fields).length > 0;
+  if (dirty) rosterDrafts.set(id, draft);
+  else rosterDrafts.delete(id);
+  const feedback = row.querySelector('.roster-feedback');
+  feedback.textContent = dirty ? '待保存' : '';
+  feedback.classList.remove('error');
+  feedback.title = '';
+});
+
+rosterContainer.addEventListener('focusout', ({ target, relatedTarget }) => {
+  if (refreshingRoster || !target.matches('[data-roster-field]')) return;
+  const row = target.closest('[data-athlete]');
+  if (row.contains(relatedTarget) && relatedTarget?.closest('[data-action]')) return;
+  void saveRosterRow(row.dataset.athlete, row.dataset.event).catch((error) => notify(error.message, true));
+});
 
 const handlers = {
   workspace({ key }) { setWorkspace(key); },
-  champion({ event, eventId, key }) {
-    if (championPane?.id === key) { championPane = null; renderRoster(); return; }
-    const alreadyChampion = standings(event).find((row) => row.rank === 1)?.athlete.id === key;
-    const job = alreadyChampion ? Promise.resolve() : run('rank:champion', { eventId, id: key });
-    return job.then(() => {
-      const athlete = event.competitors.find((row) => row.id === key);
-      const hasScore = event.kind === 'field' ? (athlete?.attempts ?? []).some(Number.isInteger) : athlete?.time != null;
-      championPane = { id: key, pushed: Boolean(hasScore) };
+  async champion({ eventId, key }) {
+    if (championBusy) return;
+    championBusy = true;
+    renderRoster();
+    try {
+      await saveRosterRow(key, eventId);
+      const event = activeEvent(state);
+      if (event?.id !== eventId) throw new Error('赛事已切换，请在当前名单中选择冠军。');
+      const onAir = standings(event).find((row) => row.rank === 1)?.athlete.id === key && state.modules.results.visible;
+      if (onAir) await run('module:save', { eventId, key: 'results', patch: { visible: false } }, '冠军已隐藏');
+      else {
+        await run('rank:champion', { eventId, id: key });
+        await run('module:save', { eventId, key: 'results', patch: { visible: true } }, '冠军已上屏');
+      }
+    } finally {
+      championBusy = false;
       renderRoster();
-    });
+    }
   },
-  'champion-push'() { return pushChampion(); },
-  'champion-show'({ eventId }) {
-    return run('module:save', { eventId, key: 'results', patch: { visible: true } }, '冠军已上屏').then(() => {
-      championPane = null;
-      renderRoster();
-    });
-  },
-  'champion-close'() { championPane = null; renderRoster(); },
   'module-toggle'({ key }) {
     return run('module:save', { eventId: state.activeEventId, key, patch: { visible: !state.modules[key].visible } });
   },
   page({ key, value }) { return run('page:set', { eventId: state.activeEventId, key, page: value }); },
   'roster-page'({ value }) { rosterView.page = value; renderRoster(); },
   'module-select'({ key }) { selectModule(key); },
-  'athlete-add'() { rosterEditing = 'new'; renderRoster(); },
-  'athlete-edit'({ key }) { rosterEditing = key; championPane = null; renderRoster(); },
-  'athlete-form-close'() { rosterEditing = null; renderRoster(); },
-  'athlete-delete'({ event, athlete }) {
-    return dialogs.confirm('删除选手', `将从名单中删除 ${athlete.name}，成绩一起移除。`, '删除', async () => {
-      await run('athlete:delete', { eventId: event.id, id: athlete.id }, '已删除选手');
-      rosterEditing = null;
-      championPane = null;
+  'athlete-add'() { addingAthlete = true; renderRoster(); $('#roster-form [name="name"]')?.focus(); },
+  'athlete-form-close'() { addingAthlete = false; renderRoster(); },
+  async 'athlete-delete'({ eventId, key }) {
+    if (rosterDeleting.has(key)) return;
+    rosterDeleting.add(key);
+    renderRoster();
+    try {
+      await rosterSaves.get(`${eventId}:${key}`)?.promise.catch(() => {});
+      await run('athlete:delete', { eventId, id: key }, '已删除选手');
+      if (state.activeEventId === eventId) {
+        rosterDrafts.delete(key);
+        if (state.modules.results.visible && !standings(activeEvent(state)).some((row) => row.rank === 1)) {
+          await run('module:save', { eventId, key: 'results', patch: { visible: false } });
+        }
+      }
+    } finally {
+      rosterDeleting.delete(key);
       renderRoster();
-    });
+    }
   },
 };
 
@@ -359,14 +435,17 @@ document.addEventListener('keydown', (e) => {
     applyLayout();
     return;
   }
-  if (e.key === 'Enter' && e.target?.id === 'champion-mark') {
+  if (e.key === 'Enter' && e.target?.matches('[data-roster-field]')) {
     e.preventDefault();
-    void pushChampion();
+    const row = e.target.closest('[data-athlete]');
+    void saveRosterRow(row.dataset.athlete, row.dataset.event).catch((error) => notify(error.message, true));
     return;
   }
   if (e.key !== 'Escape') return;
-  if (rosterEditing) { rosterEditing = null; renderRoster(); return; }
-  if (championPane) { championPane = null; renderRoster(); }
+  if (e.target?.matches('[data-roster-field]')) {
+    rosterDrafts.delete(e.target.closest('[data-athlete]').dataset.athlete);
+    renderRoster();
+  } else if (addingAthlete) { addingAthlete = false; renderRoster(); }
 });
 
 layoutPane.addEventListener('input', (e) => {

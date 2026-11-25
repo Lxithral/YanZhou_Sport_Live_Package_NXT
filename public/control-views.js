@@ -44,12 +44,12 @@ export function pager(action, page, total, label = '翻页') {
 
 export function rosterTools(event) {
   if (!event) return '';
-  return button('添加选手', { action: 'athlete-add', glyph: 'plus', small: true });
+  return `${button('添加选手', { action: 'athlete-add', glyph: 'plus', small: true })}<span class="hint">回车或离开输入框保存</span>`;
 }
 
 const SPECIAL = ['DNS', 'DNF', 'DQ', 'NM'];
 
-// 表单不再展示号码、分组、成绩、状态，编辑时要原样带上，避免服务端把这些数据清空
+// 保存名单行时补齐号码、分组和试次等资料。
 export function athleteFields(event, athlete, overrides = {}) {
   const fields = {
     name: athlete?.name ?? '', team: athlete?.team ?? '', lane: athlete?.lane ?? '',
@@ -68,62 +68,57 @@ export function athleteFields(event, athlete, overrides = {}) {
   return { ...fields, ...overrides };
 }
 
-export function competitorPanel(event, { start, limit, pane }) {
+export function competitorPanel(event, { start, limit, drafts = new Map(), championBusy = false, deleting = new Set(), resultsVisible = false }) {
+  if (!event) return '<p class="empty-table">请先选择赛事。</p>';
   const rows = roster(event).slice(start, start + limit);
-  if (!rows.length) return `<p class="empty-table">名单还是空的：点「添加选手」填一行，姓名和班级即可。</p>`;
+  if (!rows.length) return '<p class="empty-table">点「添加选手」填写姓名和班级。</p>';
   const championId = standings(event).find((row) => row.rank === 1)?.athlete.id;
   const head = `<thead><tr><th>姓名 / 班级</th><th class="result-col">成绩</th><th class="action-col">操作</th></tr></thead>`;
   const body = rows.map((athlete) => {
-    const detail = athlete.team ?? '';
-    const mark = event.kind === 'field' && event.schedule?.project !== 'high-jump' && athlete.attempts?.length
-      ? athlete.attempts.map((value) => (Number.isInteger(value) ? formatMark(value) : value)).join(' ')
-      : resultText(athlete, event);
+    const fields = athleteFields(event, athlete);
+    const draft = drafts.get(athlete.id);
+    const scoreName = event.kind === 'field' ? (event.schedule?.project === 'high-jump' ? 'jumps' : 'attempts') : 'result';
+    if (SPECIAL.includes(athlete.status)) fields[scoreName] = athlete.status;
+    const placeholder = scoreName === 'jumps' ? '130:O|135:X' : scoreName === 'attempts' ? '5.20|X|5.35' : '2:05.00';
+    const feedback = draft?.error || (draft ? '待保存' : '');
+    const input = (name, label, attrs = '') => `<input
+      id="roster-${athlete.id}-${name}" name="${name}" data-roster-field
+      data-original="${h(fields[name] ?? '')}" value="${h(draft?.fields[name] ?? fields[name] ?? '')}"
+      aria-label="${h(`${athlete.name} · ${label}`)}" aria-describedby="roster-feedback-${athlete.id}"
+      autocomplete="off" spellcheck="false" ${championBusy || deleting.has(athlete.id) ? 'disabled' : ''} ${attrs}>`;
     const isChampion = athlete.id === championId;
-    const row = `<tr data-athlete="${athlete.id}"${isChampion ? ' class="champion-row"' : ''}>
-      <td class="roster-name"><span>${h(athlete.name)}</span>${detail ? `<small>${h(detail)}</small>` : ''}</td>
-      <td class="table-result tabular">${h(mark)}</td>
-      <td class="row-actions">${button('冠军', { action: 'champion', key: athlete.id, glyph: 'trophy', small: true, variant: isChampion ? 'capture' : '', pressed: isChampion, accessible: `${isChampion ? '当前冠军' : '设为冠军'} · ${athlete.name}` })}${button('编辑', { action: 'athlete-edit', key: athlete.id, glyph: 'edit', small: true, iconOnly: true, accessible: `编辑 ${athlete.name}` })}</td>
+    const onAir = isChampion && resultsVisible;
+    return `<tr data-athlete="${athlete.id}" data-event="${event.id}" class="${isChampion ? 'champion-row' : ''}">
+      <td class="roster-name">
+        ${input('name', '姓名 / 队名', 'maxlength="30" placeholder="姓名 / 队名" required')}
+        <div class="roster-profile">${input('team', '单位 / 班级', 'maxlength="35" placeholder="班级"')}${input('lane', event.kind === 'track' ? '道次' : '出场序', `type="number" min="1" max="999" placeholder="${event.kind === 'track' ? '道次' : '序'}"`)}</div>
+      </td>
+      <td class="table-result tabular">
+        ${event.kind === 'ranking' ? `<span>${h(resultText(athlete, event))}</span>` : input(scoreName, scoreName === 'jumps' ? '跳高记录' : scoreName === 'attempts' ? '成绩 / 试次' : '成绩', `class="roster-score" maxlength="${scoreName === 'jumps' ? 1400 : scoreName === 'attempts' ? 128 : 24}" placeholder="${placeholder}"`)}
+        <small id="roster-feedback-${athlete.id}" class="roster-feedback${draft?.error ? ' error' : ''}" role="status" title="${h(draft?.error ?? '')}">${h(feedback)}</small>
+      </td>
+      <td class="row-actions"><div>${button(onAir ? '隐藏' : '冠军', { action: 'champion', key: athlete.id, glyph: 'trophy', small: true, variant: onAir ? 'capture' : '', pressed: onAir, disabled: championBusy || deleting.has(athlete.id), accessible: `${onAir ? '隐藏冠军' : '设为冠军并上屏'} · ${athlete.name}` })}${button('删除', { action: 'athlete-delete', key: athlete.id, glyph: 'trash', small: true, iconOnly: true, disabled: championBusy || deleting.has(athlete.id), accessible: `删除 ${athlete.name}` })}</div></td>
     </tr>`;
-    return row + (pane && pane.id === athlete.id ? championPaneRow(event, athlete, pane) : '');
   }).join('');
   return `<table>${head}<tbody>${body}</tbody></table>`;
 }
 
-function championPaneRow(event, athlete, pane) {
-  const jumps = event.kind === 'field' && event.schedule?.project === 'high-jump';
-  const scoreField = !jumps && (event.kind === 'track' || event.kind === 'field');
-  const current = event.kind === 'track' && athlete.time != null ? formatTime(athlete.time, true) : '';
-  return `<tr class="champion-pane"><td colspan="3">
-    <div class="champion-editor">
-      <span class="champion-editor-name">${icon('trophy')}<span class="champion-editor-copy"><b>${h(athlete.name)}</b>${athlete.team ? `<small>${h(athlete.team)}</small>` : ''}</span></span>
-      ${scoreField ? `<input id="champion-mark" placeholder="${event.kind === 'field' ? '试次，如 5.35 或 X' : '成绩，如 2:05.00'}" value="${h(current)}" autocomplete="off" spellcheck="false" inputmode="${event.kind === 'field' ? 'decimal' : 'text'}" aria-label="冠军成绩">` : ''}
-      <div class="champion-editor-actions">
-        ${scoreField ? button('推送', { action: 'champion-push', variant: 'primary' }) : ''}
-        ${pane.pushed ? button('显示', { action: 'champion-show', variant: 'published' }) : ''}
-        ${button('', { action: 'champion-close', glyph: 'close', iconOnly: true, accessible: '收起成绩栏' })}
-      </div>
-    </div>
-  </td></tr>`;
-}
-
-export function athleteForm(event, athlete) {
-  const editing = Boolean(athlete);
-  const profile = athlete ?? { lane: '', name: '', team: '' };
+export function athleteForm(event) {
   const track = event.kind === 'track';
-  const field = event.kind === 'field' && event.schedule?.project !== 'high-jump';
-  return `<form id="roster-form" data-event="${event.id}" data-athlete="${athlete?.id ?? ''}" novalidate>
-    <div class="re-head"><strong>${editing ? `编辑 ${h(athlete.name)}` : '添加选手'}</strong></div>
+  const field = event.kind === 'field';
+  const jumps = event.schedule?.project === 'high-jump';
+  return `<form id="roster-form" data-event="${event.id}" novalidate>
+    <div class="re-head"><strong>添加选手</strong></div>
     <div class="field-grid">
-      <label class="field field-wide"><span>姓名 / 队名</span><input name="name" maxlength="30" value="${h(profile.name ?? '')}" placeholder="如 陆晨曦" required></label>
-      <label class="field"><span>单位 / 班级</span><input name="team" maxlength="35" value="${h(profile.team ?? '')}" placeholder="高一3班"></label>
-      <label class="field"><span>${track ? '道次' : '出场序'}</span><input name="lane" type="number" min="1" max="999" value="${h(profile.lane ?? '')}" placeholder="—"></label>
-      ${track ? `<label class="field field-wide"><span>成绩</span><input name="result" maxlength="24" value="${athlete?.time != null ? formatTime(athlete.time, true) : ''}" placeholder="如 2:05.00" autocomplete="off" spellcheck="false"></label>`
-        : field ? `<label class="field field-wide"><span>试次</span><input name="attempts" maxlength="128" value="${h(attemptsValue(athlete ?? {}))}" placeholder="5.20 | 5.35 | X" autocomplete="off" spellcheck="false"></label>` : ''}
+      <label class="field field-wide"><span>姓名 / 队名</span><input name="name" maxlength="30" placeholder="如 陆晨曦" required></label>
+      <label class="field"><span>单位 / 班级</span><input name="team" maxlength="35" placeholder="高一3班"></label>
+      <label class="field"><span>${track ? '道次' : '出场序'}</span><input name="lane" type="number" min="1" max="999" placeholder="—"></label>
+      ${track ? '<label class="field field-wide"><span>成绩</span><input name="result" maxlength="24" placeholder="如 2:05.00" autocomplete="off" spellcheck="false"></label>'
+        : field ? `<label class="field field-wide"><span>${jumps ? '跳高记录' : '成绩 / 试次'}</span><input name="${jumps ? 'jumps' : 'attempts'}" maxlength="${jumps ? 1400 : 128}" placeholder="${jumps ? '130:O|135:X' : '5.20 | 5.35 | X'}" autocomplete="off" spellcheck="false"></label>` : ''}
     </div>
     <div class="re-actions">
-      ${editing ? button('删除选手', { action: 'athlete-delete', key: athlete.id, variant: 'danger subtle', small: true }) : ''}
       <button type="button" class="ghost-button" data-action="athlete-form-close">取消</button>
-      <button type="submit" class="button primary">${editing ? '保存修改' : '添加选手'}</button>
+      <button type="submit" class="button primary">添加选手</button>
     </div>
   </form>`;
 }
