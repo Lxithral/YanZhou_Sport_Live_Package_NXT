@@ -151,10 +151,12 @@ export function moduleList(state, event, selected) {
             <span class="module-state">${live ? '画面中' : allowed ? '未显示' : '不适用'}</span>
             <span class="module-summary">${h(summary)}</span>
           </span>
-          <span class="module-map" aria-hidden="true"><span class="module-map-rect" style="left:${((position.x / 1920) * 100).toFixed(1)}%;top:${((position.y / 1080) * 100).toFixed(1)}%;width:${((meta.w * layout.scale / 100 / 1920) * 100).toFixed(1)}%;height:${((meta.h * layout.scale / 100 / 1080) * 100).toFixed(1)}%"></span></span>
         </button>
         ${moduleControls(state, event, key, page, pages)}
-        <span class="module-meta">${position.x} · ${position.y} · ${layout.scale}%</span>
+        <div class="module-locate">
+          <span class="module-meta">${position.x} · ${position.y} · ${layout.scale}%</span>
+          <span class="module-map" aria-hidden="true"><span class="module-map-rect" style="left:${((position.x / 1920) * 100).toFixed(1)}%;top:${((position.y / 1080) * 100).toFixed(1)}%;width:${((meta.w * layout.scale / 100 / 1920) * 100).toFixed(1)}%;height:${((meta.h * layout.scale / 100 / 1080) * 100).toFixed(1)}%"></span></span>
+        </div>
       </article>`;
     })
     .join('');
