@@ -1,7 +1,7 @@
 import { SportsClient, pageUrl } from './client.js';
 import { athleteFields, athleteForm, competitorPanel, inspector, moduleList, pager, rosterTools } from './control-views.js';
 import { onProgram } from './meet-program.js';
-import { MODULES, activeEvent, applicable, clamp, eventTitle, moduleBounds, roster, standings } from './sport.js';
+import { CANVAS, MODULES, activeEvent, applicable, clamp, eventTitle, moduleBounds, modulePosition, roster, standings } from './sport.js';
 
 const $ = (selector) => document.querySelector(selector);
 const workspace = $('.app-shell');
@@ -36,11 +36,16 @@ function setWorkspace(key) {
   document.querySelectorAll('.mobile-nav button').forEach((node) => node.setAttribute('aria-pressed', String(node.dataset.key === key)));
 }
 
+let showGuides = false;
 function tellPreview(extra = {}) {
-  preview.contentWindow?.postMessage({ type: 'preview:settings', editKey: layoutKey, ...extra }, location.origin);
+  preview.contentWindow?.postMessage({ type: 'preview:settings', editKey: layoutKey, guides: showGuides, ...extra }, location.origin);
 }
 preview.addEventListener('load', () => tellPreview());
 preview.src = pageUrl('overlay', { preview: '1' });
+$('#safe-area-toggle').addEventListener('change', ({ target }) => {
+  showGuides = target.checked;
+  tellPreview();
+});
 
 const client = new SportsClient({
   role: 'control',
@@ -86,12 +91,47 @@ function updateRegion(selector, markup) {
   if (next && selection) next.setSelectionRange(selection.start, selection.end, selection.direction);
 }
 
-// 监看画布按 16:9 自适应
+// 监看画布按 16:9 自适应，并同步显示当前预览缩放
 new ResizeObserver(([entry]) => {
   const width = Math.max(0, Math.min(entry.contentRect.width, entry.contentRect.height * 16 / 9));
   canvas.style.width = `${width.toFixed(1)}px`;
   canvas.style.height = `${(width * 9 / 16).toFixed(1)}px`;
+  $('#preview-scale').textContent = `${Math.round(width / CANVAS.width * 100)}%`;
 }).observe(document.querySelector('.preview-stage'));
+
+// 局部放大：focus 页只渲染选中图层（?focus=key），再按图层位置缩放居中
+const focusStage = document.querySelector('.focus-stage');
+const focusFrame = $('#focus-preview');
+let focusFrameKey = '';
+function renderFocus() {
+  if (!state) return;
+  const key = layoutKey;
+  const meta = MODULES[key];
+  const layout = state.modules[key];
+  if (!meta || !layout) return;
+  if (focusFrameKey !== key) {
+    focusFrameKey = key;
+    focusFrame.src = pageUrl('overlay', { focus: key });
+  }
+  $('#preview-selected').textContent = meta.title;
+  $('#focus-title').textContent = `${meta.title} · 局部放大`;
+  const onAir = layout.visible && applicable(key, activeEvent(state));
+  const status = $('#focus-status');
+  status.textContent = onAir ? '上屏中' : '未上屏 · 预览';
+  status.classList.toggle('is-live', onAir);
+  const width = focusStage.clientWidth;
+  const height = focusStage.clientHeight;
+  if (!width || !height) return;
+  const { x, y } = modulePosition(key, layout);
+  const w = meta.w * layout.scale / 100;
+  const h = meta.h * layout.scale / 100;
+  const zoom = Math.min(width / (w * 1.6), height / (h * 1.6));
+  focusFrame.style.width = `${(CANVAS.width * zoom).toFixed(1)}px`;
+  focusFrame.style.height = `${(CANVAS.height * zoom).toFixed(1)}px`;
+  focusFrame.style.left = `${(width / 2 - (x + w / 2) * zoom).toFixed(1)}px`;
+  focusFrame.style.top = `${(height / 2 - (y + h / 2) * zoom).toFixed(1)}px`;
+}
+new ResizeObserver(() => renderFocus()).observe(focusStage);
 
 function renderHeader(event) {
   $('#live-event').textContent = event ? eventTitle(event) : '未选择赛事';
@@ -182,6 +222,7 @@ function render() {
   renderRoster();
   renderLayers(event);
   renderLayout();
+  renderFocus();
   tellPreview();
 }
 
@@ -209,6 +250,7 @@ function selectModule(key) {
   setWorkspace('output');
   renderLayers(activeEvent(state));
   renderLayout();
+  renderFocus();
   tellPreview();
 }
 
@@ -428,7 +470,41 @@ document.addEventListener('click', async (e) => {
   } catch (error) { notify(error.message, true); }
 });
 
+// 方向键微调：聚焦监看（或预览 iframe）后按方向键移 1px，Shift 为 10px；连续按键合并保存
+const ARROW_STEPS = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+const previewStage = document.querySelector('.preview-stage');
+let nudgePatch = null;
+let nudgeTimer;
+let lastNudgeSave = 0;
+async function flushNudge() {
+  const patch = nudgePatch;
+  nudgePatch = null;
+  if (!patch) return;
+  lastNudgeSave = Date.now();
+  try { await run('module:save', { eventId: patch.eventId, key: patch.key, patch: { x: patch.x, y: patch.y } }); }
+  catch (error) { notify(error.message, true); }
+}
+function nudge(dx, dy, step) {
+  const key = layoutKey;
+  const layout = state?.modules[key];
+  if (!layout || !applicable(key, activeEvent(state))) return;
+  const base = nudgePatch?.key === key && nudgePatch.eventId === state.activeEventId ? nudgePatch : modulePosition(key, layout);
+  const bounds = moduleBounds(key, layout.scale);
+  const x = clamp(base.x + dx * step, 0, bounds.x);
+  const y = clamp(base.y + dy * step, 0, bounds.y);
+  if (x === base.x && y === base.y && !nudgePatch) return;
+  nudgePatch = { key, eventId: state.activeEventId, x, y };
+  clearTimeout(nudgeTimer);
+  nudgeTimer = setTimeout(flushNudge, Math.max(0, 140 - (Date.now() - lastNudgeSave)));
+}
+
 document.addEventListener('keydown', (e) => {
+  const step = ARROW_STEPS[e.key];
+  if (step && state && (document.activeElement === previewStage || document.activeElement === preview)) {
+    e.preventDefault();
+    nudge(step[0], step[1], e.shiftKey ? 10 : 1);
+    return;
+  }
   if (e.key === 'Enter' && e.target?.name === 'corner') {
     e.preventDefault();
     clearTimeout(layoutSaveTimer);

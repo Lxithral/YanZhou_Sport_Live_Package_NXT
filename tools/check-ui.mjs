@@ -325,6 +325,9 @@ try {
   await click('[data-action="workspace"][data-key="output"]');
   await screenshot('control-mobile-output.png');
   assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true);
+  await viewport(320, 700);
+  await pause(120);
+  assert.equal(await evaluate('document.documentElement.scrollWidth <= innerWidth'), true, '320px output has no horizontal scroll');
   report.checks.push('390px stacks into one column and the workspace switch keeps both halves reachable.');
 
   // 6) 布局面板：外观与出场/退场默认折叠，展开后仍可编辑。
@@ -339,6 +342,26 @@ try {
   report.checks.push('Layout panel groups position, appearance and motion into collapsible sections.');
   await evaluate('document.querySelector("#layout-form").scrollIntoView({ block: "start" })');
   await screenshot('control-layout.png');
+
+  // 6.5) 局部放大、安全区参考线与方向键微调。
+  await click('[data-action="module-select"][data-key="event"]');
+  if (await evaluate('document.querySelector(\'[data-action="module-toggle"][data-key="event"]\').getAttribute("aria-pressed")') === 'false') {
+    await click('[data-action="module-toggle"][data-key="event"]');
+    await until('document.querySelector(\'[data-action="module-toggle"][data-key="event"]\').getAttribute("aria-pressed") === "true"', 'event layer restored');
+  }
+  await until('document.querySelector("#focus-preview").src.includes("focus=event")', 'focus frame follows selection');
+  await until('document.querySelector("#focus-status").textContent === "上屏中"', 'focus reports on-air layer');
+  await evaluate('document.querySelector("#safe-area-toggle").click()');
+  await until('document.querySelector("#preview").contentDocument?.querySelector("#stage")?.classList.contains("guides")', 'safe area guides on');
+  await evaluate('document.querySelector("#safe-area-toggle").click()');
+  await until('!document.querySelector("#preview").contentDocument?.querySelector("#stage")?.classList.contains("guides")', 'safe area guides off');
+  const focusX = Number(await evaluate('document.querySelector("#layout-form [name=x]").value'));
+  await evaluate('document.querySelector(".preview-stage").focus()');
+  await cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+  await cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 });
+  await until(`Number(document.querySelector("#layout-form [name=x]").value) === ${focusX + 1}`, 'arrow key nudges selected layer');
+  await screenshot('control-focus.png');
+  report.checks.push('Focus zoom tracks the selected layer, safe-area guides are preview-only, and arrow keys nudge the layer.');
 
   // 7) 深浅色切换。
   await click('[data-theme-option="light"]');

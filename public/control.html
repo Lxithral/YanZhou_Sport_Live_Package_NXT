@@ -56,16 +56,33 @@
         <div class="work-footer"><div class="pager" id="roster-pager" aria-label="名单分页"></div></div>
       </section>
     </aside>
-    <section class="panel preview-card" id="preview-card" aria-labelledby="preview-title">
-      <div class="preview-toolbar">
-        <div class="preview-live">
-          <h2 id="preview-title" class="preview-label">画面监看</h2>
+    <div class="monitor-column">
+      <section class="panel preview-card" id="preview-card" aria-labelledby="preview-title">
+        <div class="preview-toolbar">
+          <div class="preview-live">
+            <h2 id="preview-title" class="preview-label">画面监看</h2>
+            <span class="heading-tag">选中 <b id="preview-selected">Logo 挂角</b></span>
+          </div>
+          <div class="preview-tools">
+            <span class="canvas-dimensions">1920 × 1080</span>
+            <span id="preview-scale" class="preview-scale">100%</span>
+            <label class="check-label" for="safe-area-toggle" title="仅在监看中显示安全区参考线，不影响 OBS 输出"><input type="checkbox" id="safe-area-toggle"><span>安全区</span></label>
+          </div>
         </div>
-      </div>
-      <div class="preview-stage" data-backdrop="grid">
-        <div class="monitor-canvas"><iframe id="preview" title="OBS 画面预览"></iframe></div>
-      </div>
-    </section>
+        <div class="preview-stage" data-backdrop="grid" tabindex="0" aria-label="画面预览，聚焦后方向键移动选中图层 1 px，Shift 为 10 px">
+          <div class="monitor-canvas"><iframe id="preview" title="OBS 画面预览"></iframe></div>
+        </div>
+      </section>
+      <section class="panel focus-card" aria-labelledby="focus-title">
+        <div class="focus-heading">
+          <h2 id="focus-title" class="preview-label">局部放大</h2>
+          <span id="focus-status" class="focus-status"></span>
+        </div>
+        <div class="focus-stage" data-backdrop="grid">
+          <iframe id="focus-preview" title="选中图层局部放大" tabindex="-1"></iframe>
+        </div>
+      </section>
+    </div>
   </main>
   <div id="toast" class="toast" role="status" hidden></div>
   <script type="module" src="/control.js"></script>
