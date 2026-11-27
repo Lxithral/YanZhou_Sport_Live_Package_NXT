@@ -16,31 +16,48 @@
   pointer-events: none;
   display: flex;
   align-items: center;
-  flex-direction: column;
+  gap: 9px;
 }
 
-.branding-corner[hidden] {
+.branding-corner[hidden], .branding-corner-copy[hidden] {
   display: none;
 }
 
-.branding-corner--br img {
+.branding-corner > img {
   display: block;
+  flex: none;
   object-fit: contain;
-  filter: drop-shadow(0 2px 2px #2b140e) drop-shadow(0 3px 6px #26130ebb);
+  filter: drop-shadow(0 1px 2px #29180bbd);
+}
+
+.branding-corner-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding-inline-start: 13px;
+  border-inline-start: 1px solid #eac780;
+  font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+  text-shadow: 0 1px 1px #221205, 0 2px 5px #221205ed;
 }
 
 .branding-corner-text {
-  margin-top: 6px;
-  max-width: 100%;
   overflow: hidden;
-  color: #f3d9a4;
-  font-size: 17px;
+  color: #ffdf96;
+  font-size: 26px;
   font-weight: 650;
-  letter-spacing: .12em;
-  text-align: center;
+  line-height: 1.1;
+  letter-spacing: .045em;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-shadow: 0 2px 4px #2b140ecc, 0 1px 0 #2b140e;
+  -webkit-text-stroke: .025em #4e2b16c9;
+  paint-order: stroke fill;
+}
+
+.branding-corner-subtitle {
+  color: #f8e7be;
+  font: 650 11px/1.1 "Segoe UI", Arial, sans-serif;
+  letter-spacing: .21em;
+  white-space: nowrap;
 }
 
 .branding-preview {

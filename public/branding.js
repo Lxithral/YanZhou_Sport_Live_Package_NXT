@@ -4,22 +4,24 @@ import { escapeHtml } from './client.js';
 const insetX = SAFE_AREA.x + SAFE_AREA.padding;
 const insetY = SAFE_AREA.y + SAFE_AREA.padding;
 
-function bottomRightCorner(width, height) {
-  return {
-    x: CANVAS.width - insetX - width,
-    y: CANVAS.height - insetY - height,
-    width,
-    height,
-  };
-}
-
+const emblemSize = 56;
 export const BRANDING_CORNERS = {
-  br: bottomRightCorner(110, 142),
+  bl: { x: insetX, y: CANVAS.height - insetY - emblemSize, width: emblemSize, height: emblemSize },
 };
 
-export function cornerBounds(box, caption) {
-  const width = Math.max(box.width, [...caption].length * 22);
-  return { ...box, x: box.x + box.width - width, width };
+export function placeBrandCorner(box, caption, occupied) {
+  const gap = SAFE_AREA.padding;
+  const width = caption ? emblemSize + 24 + Math.max(125, [...caption].length * 28) : box.width;
+  const blockers = occupied
+    .filter((layer) => box.x < layer.x + layer.width + gap && box.x + width + gap > layer.x)
+    .sort((a, b) => b.y - a.y);
+  let y = box.y;
+  for (const layer of blockers) {
+    if (y < layer.y + layer.height + gap && y + box.height + gap > layer.y) {
+      y = layer.y - gap - box.height;
+    }
+  }
+  return y >= insetY ? { ...box, y, width } : null;
 }
 
 export function brandingMode(query) {
@@ -29,17 +31,6 @@ export function brandingMode(query) {
 
 export function showBrandLayer(mode, visible) {
   return mode !== 'off' && visible;
-}
-
-export function showBrandCorner(mode, brandVisible, focusKey, corner, occupied) {
-  if (mode !== 'modern' || !brandVisible || focusKey) return false;
-  const gap = SAFE_AREA.padding;
-  return !occupied.some((box) => (
-    corner.x < box.x + box.width + gap &&
-    corner.x + corner.width + gap > box.x &&
-    corner.y < box.y + box.height + gap &&
-    corner.y + corner.height + gap > box.y
-  ));
 }
 
 export function brandGraphic(mode, subtitle) {
@@ -55,10 +46,6 @@ export function brandGraphic(mode, subtitle) {
   </div>`;
 }
 
-const cornerMarkup = {
-  br: '<img src="/assets/branding/yanzhou-zhou-gold-mark.png" alt="" width="110" height="110">',
-};
-
 export function mountBrandCorners(stage) {
   return Object.entries(BRANDING_CORNERS).map(([key, box]) => {
     const node = stage.ownerDocument.createElement('aside');
@@ -67,12 +54,18 @@ export function mountBrandCorners(stage) {
     for (const [property, pixels] of Object.entries({ left: box.x, top: box.y, width: box.width, height: box.height })) {
       node.style[property] = `${pixels}px`;
     }
-    node.innerHTML = cornerMarkup[key];
+    node.innerHTML = `<img src="/assets/branding/yanzhou-zhou-gold-mark.png" alt="" width="${emblemSize}" height="${emblemSize}">`;
+    const copy = stage.ownerDocument.createElement('div');
+    copy.className = 'branding-corner-copy';
+    copy.hidden = true;
     const caption = stage.ownerDocument.createElement('span');
     caption.className = 'branding-corner-text';
-    caption.hidden = true;
-    node.append(caption);
+    const subtitle = stage.ownerDocument.createElement('span');
+    subtitle.className = 'branding-corner-subtitle';
+    subtitle.textContent = 'YZBTVS SPORT';
+    copy.append(caption, subtitle);
+    node.append(copy);
     stage.append(node);
-    return { node, box, caption };
+    return { node, box, copy, caption };
   });
 }

@@ -175,6 +175,40 @@ try {
   assert.equal(await evaluate('document.title'), '烟洲体育导播台');
   await until('document.querySelector("#monitor-status").hidden', 'monitor connected');
   assert.equal(await evaluate('document.querySelector("#event-picker").options.length'), 4);
+  await viewport(1920, 906);
+  await until('document.querySelector("#focus-preview").contentDocument?.querySelector(".branding-channel")', 'focused logo rendered at browser viewport height');
+  await cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  for (const visible of [false, true]) {
+    await pointerClick('[data-action="module-toggle"][data-key="brand"]');
+    await until(`[...document.querySelectorAll('#preview, #focus-preview')].every(frame => {
+      const graphic = frame.contentDocument?.querySelector('.layer--brand .graphic');
+      return graphic?.getAnimations().some(animation => animation.playState === 'running');
+    })`, 'brand toggle animates in both monitors');
+    const opacities = await evaluate(`[...document.querySelectorAll('#preview, #focus-preview')].map(frame => {
+      const graphic = frame.contentDocument.querySelector('.layer--brand .graphic');
+      const animation = graphic.getAnimations()[0];
+      animation.pause();
+      animation.currentTime = animation.effect.getTiming().duration / 2;
+      const opacity = Number(frame.contentWindow.getComputedStyle(graphic).opacity);
+      animation.finish();
+      return opacity;
+    })`);
+    assert.ok(opacities.every(opacity => opacity > 0 && opacity < 1), 'both monitors render intermediate opacity');
+    await until(`[...document.querySelectorAll('#preview, #focus-preview')].every(frame => frame.contentDocument.querySelector('.layer--brand').hidden === ${!visible})`, 'both monitors settle in the requested visibility');
+  }
+  await cdp('Emulation.setEmulatedMedia', { features: [] });
+  const monitorSize = await evaluate(`(() => {
+    const canvas = document.querySelector('.monitor-canvas').getBoundingClientRect();
+    const logo = document.querySelector('#focus-preview').contentDocument.querySelector('.branding-channel').getBoundingClientRect();
+    const titles = [...document.querySelectorAll('.module-title')];
+    return {
+      width: canvas.width, height: canvas.height, logoWidth: logo.width,
+      allTitlesFit: titles.length === 4 && titles.every(node => node.scrollWidth <= node.clientWidth + 1),
+    };
+  })()`);
+  assert.ok(monitorSize.width >= 870 && Math.abs(monitorSize.width / monitorSize.height - 16 / 9) < .01, 'live monitor has priority at the screenshot viewport');
+  assert.ok(monitorSize.logoWidth <= 430 && monitorSize.allTitlesFit, 'detail logo is bounded and every layer title fits');
+  await viewport(1920, 1080);
   assert.equal(await evaluate('document.querySelector("#obs-url").value'), base + '/overlay.html');
   assert.equal(await evaluate('document.querySelector("#open-obs").href'), base + '/overlay.html');
   await cdp('Browser.grantPermissions', { origin: base, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
@@ -297,12 +331,32 @@ try {
   // 2) 图层开关：起跑介绍上屏会替换冠军卡，下屏后回到 Logo。
   await click('[data-action="module-toggle"][data-key="lineup"]');
   await until('document.querySelector("#preview").contentDocument?.querySelector(".intro-name")?.textContent.length > 0', 'intro on air');
-  assert.equal(await evaluate('document.querySelector("#preview").contentDocument.querySelector(".layer--results").hidden'), true, 'replaced champion cuts before intro enters');
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument.querySelector(".layer--results").hidden'), true, 'replaced champion finishes exiting before intro enters');
   assert.ok((await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".intro-team")?.textContent'))?.includes('1班'), 'intro shows the class under the title');
   assert.equal(await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".intro-bib")'), null, 'bib removed from the intro');
   await screenshot('control-intro.png');
+  await sendCommand('module:save', { eventId: race.id, key: 'lineup', patch: { duration: 600 } });
+  await evaluate(`(() => {
+    const frame = document.querySelector('#preview').contentWindow;
+    frame.savedIntroCard = frame.document.querySelector('.intro-board');
+    frame.savedIntroName = frame.document.querySelector('.intro-name');
+  })()`);
   await pointerClick('.intro-controls [aria-label="下一位"]');
+  await until(`(() => {
+    const frame = document.querySelector('#preview').contentWindow;
+    const name = frame.document.querySelector('.intro-name');
+    const track = name.getAnimations()[0]?.effect.getKeyframes();
+    return name.textContent === '林浩宇' && track?.at(-1).transform === 'translateX(-36px)';
+  })()`, 'only the old name slides left');
   await until('document.querySelector("#preview").contentDocument.querySelector(".intro-name").textContent === "陈子航"', 'next introduction');
+  assert.ok(await evaluate(`(() => {
+    const frame = document.querySelector('#preview').contentWindow;
+    const name = frame.document.querySelector('.intro-name');
+    const track = name.getAnimations()[0]?.effect.getKeyframes();
+    return name === frame.savedIntroName && frame.document.querySelector('.intro-board') === frame.savedIntroCard
+      && track?.[0].transform === 'translateX(36px)' && !name.closest('.graphic').getAnimations().length;
+  })()`), 'the next name slides in without replacing or animating the card');
+  await sendCommand('module:save', { eventId: race.id, key: 'lineup', patch: { duration: 260 } });
   assert.equal(await evaluate('document.activeElement.getAttribute("aria-label")'), '下一位', 'next athlete control retains keyboard focus');
   await sendCommand('athlete:save', { eventId: race.id, id: 'seed-1', fields: { name: '林浩宇', team: '1班', bib: '101', lane: '8', result: '2:05.00' } });
   await until('document.querySelector("#lineup-picker").value === "0"', 'intro selection followed the athlete after a reorder');
@@ -373,13 +427,13 @@ try {
   await until(`Number(document.querySelector('#layout-form [data-number=x]').value) > ${defaultLayout('event').x} && document.querySelector('#layout-status').textContent === '布局已同步'`, 'pointer drag saved the layout');
   report.checks.push('Autosave, clean blur, race-scoped retry, corner alignment, reset, and pointer drag all preserve the active race layout.');
 
-  // 3.5) 右下角角标文字：选中 Logo 挂角后在面板里改，监看立即更新。
+  // 3.5) 左下角校名：选中 Logo 挂角后在面板里改，监看立即更新。
   await evaluate('document.activeElement?.blur?.()');
   await click('[data-action="module-select"][data-key="brand"]');
   await until('document.querySelector("#layout-form [name=corner]") !== null', 'corner text field');
   await type('#layout-form [name=corner]', '测试角标');
   await until('document.querySelector("#preview").contentDocument?.querySelector(".branding-corner-text")?.textContent === "测试角标"', 'corner caption updated');
-  report.checks.push('The bottom-right corner caption is editable from the brand layer settings.');
+  report.checks.push('The lower-left school name is editable from the brand layer settings.');
 
   await screenshot('control-desktop.png');
 
@@ -451,6 +505,11 @@ try {
   }
   await until('document.querySelector("#focus-preview").src.includes("focus=event")', 'focus frame follows selection');
   await until('document.querySelector("#focus-status").textContent === "上屏中"', 'focus reports on-air layer');
+  const compactHeight = await evaluate('document.querySelector(".focus-stage").clientHeight');
+  await pointerClick('#focus-size');
+  await until(`document.querySelector(".focus-stage").clientHeight > ${compactHeight + 60}`, 'detail panel expands on request');
+  await pointerClick('#focus-size');
+  await until(`document.querySelector(".focus-stage").clientHeight === ${compactHeight}`, 'detail panel returns to its compact size');
   // 监看设置在步骤 1 结束时停在「安全区关」，这里从当前状态推进到「开」再验证「关」。
   while (await evaluate('document.querySelector(\'[data-monitor="guides"]\').getAttribute("aria-pressed")') === 'true') await click('[data-monitor="guides"]');
   await click('[data-monitor="guides"]');
@@ -520,10 +579,12 @@ try {
   assert.equal(await evaluate('document.querySelector(".winner-time").textContent'), '02:03.13');
   assert.equal(await evaluate('document.querySelector(".winner-team").textContent'), '高二2班');
   assert.equal(await evaluate('document.querySelector(".winner-card").getBoundingClientRect().height'), 400);
+  assert.equal(await evaluate('document.querySelector(".winner-crown .medal-icon").getBoundingClientRect().width'), 36);
   assert.equal(await evaluate('document.querySelector(".event-banner").getBoundingClientRect().height'), 112);
   assert.ok(await evaluate('[document.documentElement, document.body, document.querySelector("#stage")].every(node => getComputedStyle(node).backgroundColor === "rgba(0, 0, 0, 0)")'), 'output background is transparent');
   await cdp('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
   await screenshot('overlay-graphics.png', { x: 96, y: 516, width: 1728, height: 520, scale: 1 });
+  await screenshot('overlay-school-lockup.png', { x: 96, y: 804, width: 716, height: 226, scale: 1 });
   report.checks.push('The event banner and champion card show the class and score on transparent 1080p output.');
 
   const mediumName = '阿卜杜勒·穆罕默德';
@@ -569,8 +630,11 @@ try {
   assert.ok(await evaluate('document.querySelector(".branding-corner-text").getBoundingClientRect().right < 1824'), 'caption stays inside title-safe area');
   assert.equal(await evaluate('getComputedStyle(document.querySelector(".branding-corner")).opacity'), '0.35', 'corner opacity matches the Logo layer');
   await checkGraphicText('long corner caption fits', ['.branding-corner-text']);
-  await sendCommand('module:save', { eventId: reviewEvent.id, key: 'event', patch: { visible: true, x: 1000, y: 898 } });
-  await until('document.querySelector(".branding-corner").hidden', 'collision includes the full width of the caption');
+  assert.equal(await evaluate('document.querySelector(".branding-corner-subtitle").textContent'), 'YZBTVS SPORT');
+  const originalY = await evaluate('document.querySelector(".branding-corner").getBoundingClientRect().top');
+  await sendCommand('module:save', { eventId: reviewEvent.id, key: 'event', patch: { visible: true, x: 425, y: 898 } });
+  await until(`document.querySelector('.branding-corner').getBoundingClientRect().top < ${originalY} && !document.querySelector('.branding-corner').hidden`, 'left corner lockup moves up to clear its full width');
+  assert.ok(await evaluate('document.querySelector(".branding-corner").getBoundingClientRect().bottom <= document.querySelector(".event-banner").getBoundingClientRect().top - 16'));
   await sendCommand('champion:publish', { eventId: reviewEvent.id, id: reviewWinner.id });
   await sendCommand('athlete:save', { eventId: reviewEvent.id, id: reviewWinner.id, fields: { name: '张三', team: '高二2班', result: '' } });
   await until('document.querySelector(".winner-time")?.textContent === "—"', 'empty score displayed');

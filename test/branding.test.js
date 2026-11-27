@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { BRANDING_CORNERS, brandGraphic, showBrandCorner } from '../public/branding.js';
+import { BRANDING_CORNERS, brandGraphic, placeBrandCorner } from '../public/branding.js';
 import { CANVAS, MODULES, SAFE_AREA, defaultLayout } from '../public/sport.js';
 import { clientState, initialState } from '../server/state.js';
 
@@ -15,11 +15,13 @@ test('default branding is inside the 1080p safe area, with spacing for adjacent 
     assert.ok(box.y + box.height <= CANVAS.height - SAFE_AREA.y - SAFE_AREA.padding);
   }
 
-  const corner = BRANDING_CORNERS.br;
-  const nearby = { x: corner.x - 100, y: corner.y, width: 98, height: 100 };
-  assert.equal(showBrandCorner('modern', true, null, corner, [nearby]), false);
-  assert.equal(showBrandCorner('modern', true, 'results', corner, []), false);
-  assert.equal(showBrandCorner('modern', true, null, corner, []), true);
+  const corner = BRANDING_CORNERS.bl;
+  const banner = { ...defaultLayout('event'), width: MODULES.event.w, height: MODULES.event.h };
+  const raised = placeBrandCorner(corner, '中山市烟洲中学', [banner]);
+  assert.equal(raised.x, corner.x);
+  assert.equal(raised.y + raised.height + SAFE_AREA.padding, banner.y);
+  assert.equal(placeBrandCorner(corner, '', []).y, corner.y);
+  assert.equal(placeBrandCorner(corner, '', [{ ...banner, y: 20, height: CANVAS.height }]), null);
 });
 
 test('modern channel shows only the wordmark and legacy keeps its seal and escaped subtitle', () => {
@@ -39,9 +41,10 @@ async function renderOverlay(t, query, staticPreview = false) {
     style: { setProperty() {} },
     dataset: {},
     children: [],
-    append(child) { this.children.push(child); },
-    animate() {
-      this.animation = { cancel() {} };
+    querySelector() { return null; },
+    append(...children) { this.children.push(...children); },
+    animate(frames, timing) {
+      this.animation = { frames, timing, cancel() {} };
       return this.animation;
     },
   });
@@ -58,6 +61,7 @@ async function renderOverlay(t, query, staticPreview = false) {
     innerHeight: 1080,
     ResizeObserver: class { observe() {} },
     matchMedia: () => ({ matches: false }),
+    getComputedStyle: () => ({ opacity: '0.4' }),
     setInterval: () => {},
     WebSocket: class {
       addEventListener(type, listener) {
@@ -80,7 +84,7 @@ async function renderOverlay(t, query, staticPreview = false) {
   };
 }
 
-test('preview loads the production renderer without WebSocket with only the left channel and lower-right mark', async (t) => {
+test('preview loads the left channel and the lower-left school lockup without WebSocket', async (t) => {
   const html = await readFile(new URL('../public/branding-preview.html', import.meta.url), 'utf8');
   assert.match(html, /class="guides" data-branding-preview/);
   assert.match(html, /src="\/overlay.js"/);
@@ -93,32 +97,35 @@ test('preview loads the production renderer without WebSocket with only the left
   const channel = overlay.node('layer--brand').children[0].innerHTML;
   assert.match(channel, /yanzhou-channel-wordmark\.png/);
   assert.doesNotMatch(channel, /yanzhou-seal\.png/);
-  assert.match(overlay.node('branding-corner--br').innerHTML, /^<img src="\/assets\/branding\/yanzhou-zhou-gold-mark\.png"[^>]*>$/);
-  assert.equal(overlay.node('branding-corner--tr'), undefined);
-  assert.equal(overlay.node('branding-corner--br').hidden, false);
+  const mark = overlay.node('branding-corner--bl');
+  assert.match(mark.innerHTML, /^<img src="\/assets\/branding\/yanzhou-zhou-gold-mark\.png"[^>]*>$/);
+  assert.deepEqual(mark.children[0].children.map(node => node.textContent), ['中山市烟洲中学', 'YZBTVS SPORT']);
+  assert.equal(mark.hidden, false);
 });
 
-test('live output gives the champion card priority through its exit animation', async (t) => {
+test('the school lockup clears the winner until its exit animation ends', async (t) => {
   const overlay = await renderOverlay(t, '', false);
   const snapshot = clientState(initialState(), true);
   snapshot.events[0].competitors.push({ id: 'champion', name: '第一名', status: 'ok', time: 120000, attempts: [] });
-  const bottom = overlay.node('branding-corner--br');
+  snapshot.modules.event.visible = false;
+  const bottom = overlay.node('branding-corner--bl');
   overlay.receive(snapshot);
   assert.equal(bottom.hidden, false);
+  const defaultTop = bottom.style.top;
   snapshot.modules.results.visible = true;
   overlay.receive(snapshot);
   const winner = overlay.node('layer--results').children[0];
   assert.match(winner.innerHTML, /winner-card/);
-  assert.equal(bottom.hidden, true);
   snapshot.modules.results.x = 112;
+  snapshot.modules.results.y = 630;
   overlay.receive(snapshot);
-  assert.equal(bottom.hidden, false);
-  snapshot.modules.results.x = defaultLayout('results').x;
+  const raisedTop = bottom.style.top;
+  assert.ok(parseFloat(raisedTop) < parseFloat(defaultTop));
   snapshot.modules.results.visible = false;
   overlay.receive(snapshot);
-  assert.equal(bottom.hidden, true);
+  assert.equal(bottom.style.top, raisedTop);
   winner.animation.onfinish();
-  assert.equal(bottom.hidden, false);
+  assert.equal(bottom.style.top, defaultTop);
   snapshot.modules.brand.opacity = 25;
   overlay.receive(snapshot);
   assert.equal(bottom.style.opacity, 0.25);
@@ -127,18 +134,73 @@ test('live output gives the champion card priority through its exit animation', 
   assert.equal(bottom.hidden, true);
 });
 
-test('legacy keeps the original wordmark and omits both new right corners', async (t) => {
+test('visibility reverses smoothly and both brand corners fade together', async (t) => {
+  const overlay = await renderOverlay(t, '?motion', false);
+  const snapshot = clientState(initialState(), true);
+  const event = snapshot.events[0];
+  event.competitors.push({ id: 'runner', name: '甲', status: 'pending', time: null, attempts: [] });
+  snapshot.modules.event.visible = false;
+  overlay.receive(snapshot);
+  const intro = overlay.node('layer--lineup');
+  const graphic = intro.children[0];
+  snapshot.modules.lineup.visible = true;
+  overlay.receive(snapshot);
+  assert.deepEqual(graphic.animation.frames, [{ opacity: 0 }, { opacity: 1 }]);
+  snapshot.modules.lineup.visible = false;
+  overlay.receive(snapshot);
+  assert.equal(intro.hidden, false);
+  assert.deepEqual(graphic.animation.frames, [{ opacity: 0.4 }, { opacity: 0 }]);
+  graphic.animation.onfinish();
+  assert.equal(intro.hidden, true);
+
+  snapshot.modules.brand.visible = false;
+  overlay.receive(snapshot);
+  const mark = overlay.node('branding-corner--bl');
+  const logo = overlay.node('layer--brand').children[0];
+  assert.deepEqual(mark.animation.frames, [{ filter: 'opacity(1)' }, { filter: 'opacity(0)' }]);
+  assert.deepEqual(mark.animation.timing, logo.animation.timing);
+  assert.equal(mark.hidden, false);
+  logo.animation.onfinish();
+  assert.equal(mark.hidden, true);
+});
+
+test('event banner and lineup alternate with an exit followed by an entrance', async (t) => {
+  const overlay = await renderOverlay(t, '?alternation', false);
+  const snapshot = clientState(initialState(), true);
+  snapshot.events[0].competitors.push({ id: 'runner', name: '甲', status: 'pending', time: null, attempts: [] });
+  overlay.receive(snapshot);
+  const banner = overlay.node('layer--event');
+  const intro = overlay.node('layer--lineup');
+
+  for (const [fromKey, from, toKey, to] of [
+    ['event', banner, 'lineup', intro],
+    ['lineup', intro, 'event', banner],
+  ]) {
+    snapshot.modules[fromKey].visible = false;
+    snapshot.modules[toKey].visible = true;
+    overlay.receive(snapshot);
+    assert.equal(from.hidden, false);
+    assert.equal(to.hidden, true);
+    assert.deepEqual(from.children[0].animation.frames, [{ opacity: 1 }, { opacity: 0 }]);
+    from.children[0].animation.onfinish();
+    assert.equal(from.hidden, true);
+    assert.equal(to.hidden, false);
+    assert.deepEqual(to.children[0].animation.frames, [{ opacity: 0 }, { opacity: 1 }]);
+    to.children[0].animation.onfinish();
+  }
+});
+
+test('legacy keeps the original wordmark and omits the school lockup', async (t) => {
   const overlay = await renderOverlay(t, '?branding=legacy');
   overlay.receive(clientState(initialState(), true));
   assert.match(overlay.node('layer--brand').children[0].innerHTML, /yanzhou-sport-wordmark\.png/);
-  assert.equal(overlay.node('branding-corner--tr'), undefined);
-  assert.equal(overlay.node('branding-corner--br'), undefined);
+  assert.equal(overlay.node('branding-corner--bl'), undefined);
 });
 
 test('off hides the brand but leaves the event graphic on air', async (t) => {
   const overlay = await renderOverlay(t, '?branding=off');
   overlay.receive(clientState(initialState(), true));
   assert.equal(overlay.node('layer--brand').hidden, true);
-  assert.equal(overlay.node('branding-corner--tr'), undefined);
+  assert.equal(overlay.node('branding-corner--bl'), undefined);
   assert.match(overlay.node('layer--event').children[0].innerHTML, /event-banner/);
 });

@@ -1,11 +1,12 @@
 import { SportsClient, escapeHtml as h } from './client.js';
+import { medalIcon } from './medal.js';
 import {
   CANVAS, GRADES, KINDS, MODULES, OUTPUT_LAYERS, SAFE_AREA, activeEvent, championAthlete, clamp, defaultLayout, eventStage, eventTitle, heats,
   lineupRoster, moduleBounds, moduleHasContent, modulePosition, resultText,
 } from './sport.js';
 import { className } from './meet-program.js';
 import {
-  brandGraphic, brandingMode, cornerBounds, mountBrandCorners, showBrandCorner, showBrandLayer,
+  brandGraphic, brandingMode, mountBrandCorners, placeBrandCorner, showBrandLayer,
 } from './branding.js';
 
 const stage = document.querySelector('#stage');
@@ -17,7 +18,7 @@ for (const [name, inset] of Object.entries(SAFE_AREA)) stage.style.setProperty(`
 const preview = window.parent !== window && query.get('preview') === '1';
 const layers = {};
 const brandCorners = mode === 'modern' && !focusKey ? mountBrandCorners(stage) : [];
-const replaces = { event: ['lineup'], lineup: ['event', 'results'], results: ['lineup'] };
+const exclusiveLayers = { event: ['lineup'], lineup: ['event', 'results'], results: ['lineup'] };
 let state;
 let editKey = '';
 let drag;
@@ -32,7 +33,7 @@ for (const key of OUTPUT_LAYERS) {
   content.className = 'graphic';
   node.append(content);
   stage.append(node);
-  layers[key] = { node, content, shown: false, html: '', animation: null };
+  layers[key] = { node, content, shown: false, html: '', animation: null, pendingGraphic: null };
 }
 
 function resize() {
@@ -55,9 +56,7 @@ function teamLabel(event, athlete) {
   return className(event, athlete) || '—';
 }
 
-function lineupGraphic(event) {
-  const page = state.pages.lineup;
-  const athlete = lineupRoster(event)[page];
+function lineupGraphic(event, athlete) {
   if (!athlete) return '';
   const { name } = athlete;
   const length = [...name].length;
@@ -71,14 +70,13 @@ function lineupGraphic(event) {
   return `<div class="intro-board">
     <div class="intro-bar">
       <span class="intro-kicker" style="--intro-title-size: ${Math.max(22, titleSize)}px">${h(title)}</span>
-      <div class="intro-main">${lane ? `<span class="intro-lane">${h(lane)}</span>` : ''}<span class="intro-team" style="--intro-team-size: ${teamSize}px">${h(team)}</span></div>
+      <div class="intro-main"><span class="intro-lane"${lane ? '' : ' hidden'}>${h(lane)}</span><span class="intro-team" style="--intro-team-size: ${teamSize}px">${h(team)}</span></div>
     </div>
     <div class="intro-stub"><strong class="intro-name" style="--name-size: ${nameSize}px">${h(name)}</strong></div>
   </div>`;
 }
 
-function championGraphic(event) {
-  const winner = championAthlete(event);
+function championGraphic(event, winner) {
   if (!winner) return '';
   const { name } = winner;
   const time = resultText(winner, event);
@@ -90,10 +88,10 @@ function championGraphic(event) {
   const teamSize = Math.min(30, Math.max(22, Math.floor(280 / Math.min(teamLength || 1, 14))));
   const timeSize = Math.min(54, Math.max(22, Math.floor(280 / (time.length * .62))));
   return `<div class="winner-card" aria-label="冠军">
-    <div class="winner-crown">冠军</div>
+    <div class="winner-crown">${medalIcon()}<span>冠军</span></div>
     <div class="winner-body">
       <strong class="winner-name" style="--name-size: ${nameSize}px">${h(name)}</strong>
-      ${team ? `<span class="winner-team" style="--team-size: ${teamSize}px">${h(team)}</span>` : ''}
+      <span class="winner-team" style="--team-size: ${teamSize}px"${team ? '' : ' hidden'}>${h(team)}</span>
     </div>
     <div class="winner-result">
       <span class="winner-result-label">成绩</span>
@@ -132,7 +130,7 @@ function classGraphic(event) {
 }
 */
 
-function sportsGraphic(key, event) {
+function sportsGraphic(key, event, athlete) {
   switch (key) {
     case 'brand': return brandGraphic(mode, state.meet.subtitle);
     case 'event': {
@@ -151,8 +149,8 @@ function sportsGraphic(key, event) {
     }
     // case 'score': 球赛记分牌先不用。
     // case 'teams': 班级积分榜先不用。
-    case 'lineup': return lineupGraphic(event);
-    case 'results': return championGraphic(event);
+    case 'lineup': return lineupGraphic(event, athlete);
+    case 'results': return championGraphic(event, athlete);
     default: return '';
   }
 }
@@ -163,27 +161,112 @@ const keyframes = {
   side: [{ opacity: 0, transform: 'translateX(-32px)' }, { opacity: 1, transform: 'translateX(0)' }],
   zoom: [{ opacity: 0, transform: 'scale(.93)' }, { opacity: 1, transform: 'scale(1)' }],
 };
+const fadeEasing = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
+
+function stopVisibility(layer) {
+  layer.animation?.cancel();
+  layer.animation = null;
+  if (layer === layers.brand) {
+    for (const corner of brandCorners) {
+      corner.animation?.cancel();
+      corner.animation = null;
+    }
+  }
+}
+
+function stopPersonMotion(layer) {
+  layer.personAnimation?.cancel();
+  layer.personAnimation = null;
+  layer.pendingGraphic = null;
+}
+
+function animateGraphic(layer, frames, duration, easing, finish) {
+  const timing = { duration, easing, fill: 'both' };
+  const animation = layer.content.animate(frames, timing);
+  layer.animation = animation;
+  if (layer === layers.brand) {
+    for (const corner of brandCorners) {
+      const opacityFrames = frames.map(({ opacity }) => ({ filter: `opacity(${opacity})` }));
+      corner.animation = corner.node.animate(opacityFrames, timing);
+    }
+  }
+  animation.onfinish = () => {
+    if (layer.animation !== animation) return;
+    finish();
+  };
+}
+
+const nameSelector = '.intro-name, .winner-name';
+const personFields = [nameSelector, '.intro-kicker', '.intro-lane', '.intro-team', '.winner-team', '.winner-time'];
+
+function replaceGraphic(layer, html, name) {
+  if (html === layer.html) return;
+  if (name) {
+    const next = document.createElement('template');
+    next.innerHTML = html;
+    for (const selector of personFields) {
+      const field = layer.content.querySelector(selector);
+      const replacement = next.content.querySelector(selector);
+      if (!field || !replacement) continue;
+      if (field.textContent !== replacement.textContent) field.textContent = replacement.textContent;
+      field.style.cssText = replacement.style.cssText;
+      field.hidden = replacement.hidden;
+    }
+  } else layer.content.innerHTML = html;
+  layer.html = html;
+}
+
+function renderGraphic(layer, html, personChanged, layout, cut) {
+  const name = layer.content.querySelector(nameSelector);
+  const canSlide = name && !cut && layer.shown && (layout.enter !== 'none' || layout.exit !== 'none');
+  if (canSlide && layer.pendingGraphic !== null) {
+    layer.pendingGraphic = html;
+  } else if (canSlide && personChanged && html !== layer.html) {
+    const current = layer.personAnimation
+      ? { opacity: getComputedStyle(name).opacity, transform: getComputedStyle(name).transform }
+      : { opacity: 1, transform: 'translateX(0)' };
+    stopPersonMotion(layer);
+    layer.pendingGraphic = html;
+    const timing = { duration: layout.duration / 2, easing: fadeEasing, fill: 'both' };
+    const exited = name.animate([current, { opacity: 0, transform: 'translateX(-36px)' }], timing);
+    layer.personAnimation = exited;
+    exited.onfinish = () => {
+      if (layer.personAnimation !== exited) return;
+      replaceGraphic(layer, layer.pendingGraphic, name);
+      stopPersonMotion(layer);
+      const entered = name.animate([{ opacity: 0, transform: 'translateX(36px)' }, { opacity: 1, transform: 'translateX(0)' }], timing);
+      layer.personAnimation = entered;
+      entered.onfinish = () => {
+        if (layer.personAnimation === entered) stopPersonMotion(layer);
+      };
+    };
+  } else {
+    if (!canSlide) stopPersonMotion(layer);
+    replaceGraphic(layer, html, name);
+  }
+}
 
 function visibility(layer, visible, layout, immediate) {
   if (!immediate && visible === layer.shown) return;
   layer.shown = visible;
-  layer.animation?.cancel();
-  layer.animation = null;
-  const frames = keyframes[visible ? layout.enter : layout.exit];
-  if (immediate || !frames || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  const preset = visible ? layout.enter : layout.exit;
+  const from = !immediate && preset === 'fade' && layer.animation ? Number(getComputedStyle(layer.content).opacity) : null;
+  stopVisibility(layer);
+  stopPersonMotion(layer);
+  const frames = keyframes[preset];
+  if (immediate || !frames) {
     layer.node.hidden = !visible;
     return;
   }
   layer.node.hidden = false;
-  const animation = layer.content.animate(visible ? frames : [...frames].reverse(), { duration: layout.duration, easing: 'ease-out', fill: 'both' });
-  layer.animation = animation;
-  animation.onfinish = () => {
-    if (layer.animation !== animation) return;
+  const track = visible ? [...frames] : [...frames].reverse();
+  if (from !== null) track[0] = { opacity: from };
+  animateGraphic(layer, track, layout.duration, preset === 'fade' ? fadeEasing : 'ease-out', () => {
     layer.node.hidden = !layer.shown;
-    animation.cancel();
-    layer.animation = null;
-    updateBrandCorners();
-  };
+    stopVisibility(layer);
+    if (visible) updateBrandCorners();
+    else render(state);
+  });
 }
 
 function place(node, x, y) {
@@ -221,16 +304,18 @@ function updateBrandCorners() {
     });
   }
   const cornerText = state.meet?.corner ?? '';
-  for (const { node, box, caption } of brandCorners) {
-    const bounds = cornerBounds(box, cornerText);
+  for (const { node, box, copy, caption } of brandCorners) {
+    const bounds = brandVisible ? placeBrandCorner(box, cornerText, occupied) : null;
     if (caption.textContent !== cornerText) {
       caption.textContent = cornerText;
-      caption.hidden = !cornerText;
-      node.style.left = `${bounds.x}px`;
+      copy.hidden = !cornerText;
+    }
+    if (bounds) {
+      place(node, bounds.x, bounds.y);
       node.style.width = `${bounds.width}px`;
     }
     node.style.opacity = opacity / 100;
-    node.hidden = !showBrandCorner(mode, brandVisible, focusKey, bounds, occupied);
+    node.hidden = !bounds;
   }
 }
 
@@ -246,25 +331,28 @@ function render(snapshot) {
   stage.style.setProperty('--accent', state.meet.accent);
   const event = activeEvent(state);
   const shown = new Set(Object.keys(layers).filter((key) => {
-    const selected = focusKey ? key === focusKey : state.modules[key]?.visible;
+    const selected = state.modules[key]?.visible && (!focusKey || key === focusKey);
     return (key === 'brand' ? showBrandLayer(mode, selected) : selected) && moduleHasContent(key, event);
   }));
+  // 先启动退场，再判断新图层是否已经可以进场。
+  for (const [key, layer] of Object.entries(layers)) {
+    const layout = state.modules[key];
+    if (layout && !shown.has(key)) visibility(layer, false, layout, cut);
+  }
   for (const [key, layer] of Object.entries(layers)) {
     const layout = state.modules[key];
     if (!layout) continue;
-    const visible = shown.has(key);
+    const visible = shown.has(key) && !exclusiveLayers[key]?.some((other) => !shown.has(other) && !layers[other].node.hidden);
     if (drag?.key !== key) placeAtLayout(key, layer.node);
     layer.node.style.transform = `scale(${layout.scale / 100})`;
     layer.node.style.opacity = layout.opacity / 100;
     if (visible) {
-      const html = sportsGraphic(key, event);
-      if (html !== layer.html) {
-        layer.content.innerHTML = html;
-        layer.html = html;
-      }
+      const athlete = key === 'lineup' ? lineupRoster(event)[state.pages.lineup] : key === 'results' ? championAthlete(event) : undefined;
+      const personChanged = layer.personId !== athlete?.id;
+      layer.personId = athlete?.id;
+      renderGraphic(layer, sportsGraphic(key, event, athlete), personChanged, layout, cut);
     }
-    const replaced = !visible && replaces[key]?.some((other) => shown.has(other));
-    visibility(layer, visible, layout, cut || replaced);
+    if (visible) visibility(layer, true, layout, cut);
   }
   updateBrandCorners();
 }
@@ -272,7 +360,7 @@ function render(snapshot) {
 if (staticPreview) {
   render({
     events: [],
-    meet: { accent: '#f5c84b', subtitle: '' },
+    meet: { accent: '#f5c84b', subtitle: '', corner: '中山市烟洲中学' },
     modules: { brand: defaultLayout('brand') },
   });
 } else {
