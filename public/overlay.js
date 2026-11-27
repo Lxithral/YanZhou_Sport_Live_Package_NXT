@@ -1,11 +1,11 @@
 import { SportsClient, escapeHtml as h } from './client.js';
 import {
-  CANVAS, GRADES, KINDS, MODULES, SAFE_AREA, activeEvent, applicable, clamp, defaultLayout, heats,
-  lineupRoster, moduleBounds, modulePosition, paginatedCount, resultText, standings,
+  CANVAS, GRADES, KINDS, MODULES, OUTPUT_LAYERS, SAFE_AREA, activeEvent, championAthlete, clamp, defaultLayout, eventStage, eventTitle, heats,
+  lineupRoster, moduleBounds, moduleHasContent, modulePosition, resultText,
 } from './sport.js';
 import { className } from './meet-program.js';
 import {
-  brandGraphic, brandingMode, mountBrandCorners, showBrandCorner, showBrandLayer,
+  brandGraphic, brandingMode, cornerBounds, mountBrandCorners, showBrandCorner, showBrandLayer,
 } from './branding.js';
 
 const stage = document.querySelector('#stage');
@@ -17,12 +17,13 @@ for (const [name, inset] of Object.entries(SAFE_AREA)) stage.style.setProperty(`
 const preview = window.parent !== window && query.get('preview') === '1';
 const layers = {};
 const brandCorners = mode === 'modern' && !focusKey ? mountBrandCorners(stage) : [];
+const replaces = { event: ['lineup'], lineup: ['event', 'results'], results: ['lineup'] };
 let state;
 let editKey = '';
 let drag;
 let ratio = 1;
 
-for (const key of Object.keys(MODULES)) {
+for (const key of OUTPUT_LAYERS) {
   const node = document.createElement('section');
   node.className = `layer layer--${key}`;
   node.dataset.module = key;
@@ -49,15 +50,6 @@ function laneLabel(lane) {
   return word ? `${word}道` : `${lane}道`;
 }
 
-function broadcastTitle(event) {
-  const grade = event.schedule?.grade;
-  const gradeLabel = grade && grade !== 'staff' ? GRADES[grade] : '';
-  const division = event.division === 'men' ? '男子' : event.division === 'women' ? '女子' : '';
-  const name = event.name.replace(/\s+/g, '');
-  const stage = (event.stage || '').replace(/男子|女子/g, '');
-  return `${gradeLabel}${division}${name}${stage}`;
-}
-
 function teamLabel(event, athlete) {
   if (!event.schedule?.grade || event.schedule.grade === 'staff') return athlete.team || '—';
   return className(event, athlete) || '—';
@@ -66,24 +58,31 @@ function teamLabel(event, athlete) {
 function lineupGraphic(event) {
   const page = state.pages.lineup;
   const athlete = lineupRoster(event)[page];
-  const name = athlete?.name || '等待参赛名单';
-  const nameSize = Math.min(76, Math.max(28, Math.floor(300 / [...name].length)));
-  const lane = athlete?.lane ? laneLabel(athlete.lane) : '';
-  const team = athlete ? teamLabel(event, athlete) : '等待参赛名单';
+  if (!athlete) return '';
+  const { name } = athlete;
+  const length = [...name].length;
+  const lines = length > 22 ? 3 : length > 6 ? 2 : 1;
+  const nameSize = clamp(Math.floor(286 / Math.ceil(length / lines)), 24, 76);
+  const title = eventTitle(event);
+  const titleSize = Math.min(28, Math.floor(920 / Math.max(1, [...title].length)));
+  const lane = athlete.lane ? laneLabel(athlete.lane) : '';
+  const team = teamLabel(event, athlete);
+  const teamSize = clamp(Math.floor(720 / Math.max(1, [...team].length)), 23, 38);
   return `<div class="intro-board">
     <div class="intro-bar">
-      <span class="intro-kicker">${h(broadcastTitle(event))}</span>
-      <div class="intro-main">${lane ? `<span class="intro-lane">${h(lane)}</span>` : ''}<span class="intro-team">${h(team)}</span></div>
+      <span class="intro-kicker" style="--intro-title-size: ${Math.max(22, titleSize)}px">${h(title)}</span>
+      <div class="intro-main">${lane ? `<span class="intro-lane">${h(lane)}</span>` : ''}<span class="intro-team" style="--intro-team-size: ${teamSize}px">${h(team)}</span></div>
     </div>
     <div class="intro-stub"><strong class="intro-name" style="--name-size: ${nameSize}px">${h(name)}</strong></div>
   </div>`;
 }
 
 function championGraphic(event) {
-  const winner = standings(event).find((row) => row.rank === 1);
-  const name = winner?.athlete.name || '等待冠军';
-  const time = winner ? resultText(winner.athlete, event) : '—';
-  const team = winner?.athlete.team ? teamLabel(event, winner.athlete) : '';
+  const winner = championAthlete(event);
+  if (!winner) return '';
+  const { name } = winner;
+  const time = resultText(winner, event);
+  const team = winner.team ? teamLabel(event, winner) : '';
   const nameLength = [...name].length;
   const teamLength = [...team].length;
   const nameLimit = nameLength <= 4 ? 72 : teamLength > 26 ? 46 : 56;
@@ -97,6 +96,7 @@ function championGraphic(event) {
       ${team ? `<span class="winner-team" style="--team-size: ${teamSize}px">${h(team)}</span>` : ''}
     </div>
     <div class="winner-result">
+      <span class="winner-result-label">成绩</span>
       <span class="winner-time" style="--time-size: ${timeSize}px">${h(time)}</span>
     </div>
   </div>`;
@@ -138,7 +138,7 @@ function sportsGraphic(key, event) {
     case 'event': {
       const group = event.kind === 'track' && heats(event).length > 1 ? `第 ${event.heat ?? 1} 组` : '';
       const grade = event.schedule?.grade;
-      const context = [grade === 'staff' ? '' : GRADES[grade], event.stage, group].filter(Boolean).join(' · ');
+      const context = [grade === 'staff' ? '' : GRADES[grade], eventStage(event), group].filter(Boolean).join(' · ');
       const titleSize = Math.min(54, Math.max(22, Math.floor(440 / Math.min([...event.name].length, 20))));
       const contextSize = Math.min(26, Math.max(18, Math.floor(440 / ([...context].length || 1))));
       return `<div class="event-banner">
@@ -168,16 +168,20 @@ function visibility(layer, visible, layout, immediate) {
   if (!immediate && visible === layer.shown) return;
   layer.shown = visible;
   layer.animation?.cancel();
+  layer.animation = null;
   const frames = keyframes[visible ? layout.enter : layout.exit];
   if (immediate || !frames || matchMedia('(prefers-reduced-motion: reduce)').matches) {
     layer.node.hidden = !visible;
     return;
   }
   layer.node.hidden = false;
-  layer.animation = layer.content.animate(visible ? frames : [...frames].reverse(), { duration: layout.duration, easing: 'ease-out', fill: 'both' });
-  layer.animation.onfinish = () => {
+  const animation = layer.content.animate(visible ? frames : [...frames].reverse(), { duration: layout.duration, easing: 'ease-out', fill: 'both' });
+  layer.animation = animation;
+  animation.onfinish = () => {
+    if (layer.animation !== animation) return;
     layer.node.hidden = !layer.shown;
-    layer.animation?.cancel();
+    animation.cancel();
+    layer.animation = null;
     updateBrandCorners();
   };
 }
@@ -191,7 +195,10 @@ function placeAtLayout(key, node) {
   const layout = state.modules[key];
   if (!layout) return;
   const { x, y } = modulePosition(key, layout);
-  place(node, x, y);
+  if (key === 'brand' && mode === 'legacy') {
+    place(node, Math.min(x, CANVAS.width - Math.ceil(609 * layout.scale / 100)),
+      Math.min(y, CANVAS.height - Math.ceil(118 * layout.scale / 100)));
+  } else place(node, x, y);
 }
 
 function layerSelection() {
@@ -200,7 +207,8 @@ function layerSelection() {
 
 function updateBrandCorners() {
   if (!brandCorners.length) return;
-  const brandVisible = !layers.brand.node.hidden && state.modules.brand?.opacity > 0;
+  const opacity = state.modules.brand?.opacity ?? 0;
+  const brandVisible = !layers.brand.node.hidden && opacity > 0;
   const occupied = [];
   for (const [key, layer] of Object.entries(layers)) {
     const layout = state.modules[key];
@@ -214,11 +222,15 @@ function updateBrandCorners() {
   }
   const cornerText = state.meet?.corner ?? '';
   for (const { node, box, caption } of brandCorners) {
-    if (caption) {
+    const bounds = cornerBounds(box, cornerText);
+    if (caption.textContent !== cornerText) {
       caption.textContent = cornerText;
       caption.hidden = !cornerText;
+      node.style.left = `${bounds.x}px`;
+      node.style.width = `${bounds.width}px`;
     }
-    node.hidden = !showBrandCorner(mode, brandVisible, focusKey, box, occupied);
+    node.style.opacity = opacity / 100;
+    node.hidden = !showBrandCorner(mode, brandVisible, focusKey, bounds, occupied);
   }
 }
 
@@ -233,11 +245,14 @@ function render(snapshot) {
   state = snapshot;
   stage.style.setProperty('--accent', state.meet.accent);
   const event = activeEvent(state);
+  const shown = new Set(Object.keys(layers).filter((key) => {
+    const selected = focusKey ? key === focusKey : state.modules[key]?.visible;
+    return (key === 'brand' ? showBrandLayer(mode, selected) : selected) && moduleHasContent(key, event);
+  }));
   for (const [key, layer] of Object.entries(layers)) {
     const layout = state.modules[key];
     if (!layout) continue;
-    const selected = focusKey ? key === focusKey : layout.visible;
-    const visible = (key === 'brand' ? showBrandLayer(mode, selected) : selected) && applicable(key, event);
+    const visible = shown.has(key);
     if (drag?.key !== key) placeAtLayout(key, layer.node);
     layer.node.style.transform = `scale(${layout.scale / 100})`;
     layer.node.style.opacity = layout.opacity / 100;
@@ -248,7 +263,8 @@ function render(snapshot) {
         layer.html = html;
       }
     }
-    visibility(layer, visible, layout, cut);
+    const replaced = !visible && replaces[key]?.some((other) => shown.has(other));
+    visibility(layer, visible, layout, cut || replaced);
   }
   updateBrandCorners();
 }
@@ -260,7 +276,13 @@ if (staticPreview) {
     modules: { brand: defaultLayout('brand') },
   });
 } else {
-  new SportsClient({ role: 'view', onState: render });
+  new SportsClient({
+    role: 'view',
+    onState: render,
+    onConnection(ready) {
+      if (preview) window.parent.postMessage({ type: 'preview:connection', ready }, location.origin);
+    },
+  });
 }
 
 if (preview && !staticPreview) {
@@ -276,7 +298,7 @@ if (preview && !staticPreview) {
   });
   stage.addEventListener('pointerdown', (pointer) => {
     const node = pointer.target.closest('.is-editable');
-    if (!state || !node || pointer.button !== 0) return;
+    if (!state || drag || !node || pointer.button !== 0) return;
     const key = node.dataset.module;
     const layout = state.modules[key];
     const { x, y } = modulePosition(key, layout);
@@ -296,11 +318,12 @@ if (preview && !staticPreview) {
     if (drag?.pointerId !== pointer.pointerId) return;
     const { key, x, y, eventId, initialX, initialY } = drag;
     drag = undefined;
-    if (pointer.type === 'pointercancel') place(layers[key].node, initialX, initialY);
+    if (pointer.type !== 'pointerup') placeAtLayout(key, layers[key].node);
     else if (x !== initialX || y !== initialY) window.parent.postMessage({ type: 'preview:move', key, x, y, eventId }, location.origin);
     updateBrandCorners();
   }
   stage.addEventListener('pointerup', endDrag);
   stage.addEventListener('pointercancel', endDrag);
+  stage.addEventListener('lostpointercapture', endDrag);
   window.parent.postMessage({ type: 'preview:ready' }, location.origin);
 }

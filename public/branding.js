@@ -17,6 +17,11 @@ export const BRANDING_CORNERS = {
   br: bottomRightCorner(110, 142),
 };
 
+export function cornerBounds(box, caption) {
+  const width = Math.max(box.width, [...caption].length * 22);
+  return { ...box, x: box.x + box.width - width, width };
+}
+
 export function brandingMode(query) {
   const value = query.get('branding');
   return value === 'legacy' || value === 'off' ? value : 'modern';

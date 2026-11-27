@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { applyCommand, clientState, initialState, migrateState, verifyState } from '../server/state.js';
-import { MODULES, PRESETS, SAFE_AREA, activeEvent, defaultLayout,
+import { MODULES, PRESETS, SAFE_AREA, activeEvent, championAthlete, defaultLayout, lineupRoster, parseTime,
   eventStage, formatTime, moduleBounds, paginatedCount, resultRows, safeAnchor, standings } from '../public/sport.js';
 
 function session() {
@@ -126,7 +126,7 @@ test('field entries keep valid, skipped and invalid attempts together and reject
 
 test('layout bounds, single result board and clear are enforced on the server model', () => {
   const app = session();
-  app.roster(undefined, Array.from({ length: 8 }, (_, index) => ({ name: `选手${index + 1}`, bib: String(101 + index) })));
+  app.roster(undefined, Array.from({ length: 8 }, (_, index) => ({ name: `选手${index + 1}`, bib: String(101 + index), result: String(120 + index) })));
   app.send('module:save', { key: 'lineup', patch: { visible: true } });
   app.send('page:set', { key: 'lineup', page: 1 });
   assert.equal(app.event.graphics.pages.lineup, 1);
@@ -155,6 +155,59 @@ test('publishing the intro preserves the athlete selected while hidden', () => {
   app.send('module:save', { key: 'event', patch: { visible: true } });
   assert.equal(app.event.graphics.modules.lineup.visible, false);
   assert.equal(app.event.graphics.modules.event.visible, true);
+});
+
+test('on-air intro stays on the same athlete when lane order changes and clears when that athlete leaves', () => {
+  const app = session();
+  assert.throws(() => app.send('module:save', { key: 'lineup', patch: { visible: true } }), /添加本组的选手/);
+  app.roster(undefined, [{ name: '甲', lane: '2' }, { name: '乙', lane: '4' }]);
+  const id = app.event.competitors[1].id;
+  app.send('page:set', { key: 'lineup', page: 1 });
+  app.send('module:save', { key: 'lineup', patch: { visible: true } });
+  app.roster(undefined, [{ name: '丙', lane: '1' }]);
+  assert.equal(app.event.graphics.pages.lineup, 2);
+  assert.equal(lineupRoster(app.event)[app.event.graphics.pages.lineup].id, id);
+  app.send('athlete:save', { id, fields: { name: '乙', lane: '3' } });
+  assert.equal(lineupRoster(app.event)[app.event.graphics.pages.lineup].id, id);
+  app.send('athlete:delete', { id });
+  assert.equal(app.event.graphics.modules.lineup.visible, false);
+  assert.ok(lineupRoster(app.event)[app.event.graphics.pages.lineup]);
+});
+
+test('champion publishing updates the graphic in one revision and keeps official ranks and scoring', () => {
+  const app = session();
+  assert.throws(() => app.send('module:save', { key: 'results', patch: { visible: true } }), /有效的冠军选手/);
+  app.roster(undefined, [{ name: '甲', team: '1班', result: '2:05.00' }, { name: '乙', team: '2班', result: '2:10.00' }]);
+  const ranks = app.event.competitors.map(({ id }) => id);
+  app.send('rank:move', { id: ranks[0], beforeId: ranks[1] });
+  app.send('points:confirm', { scored: true });
+  const revision = app.state.revision;
+  app.send('champion:publish', { id: ranks[1] });
+  assert.equal(app.state.revision, revision + 1);
+  assert.equal(app.event.schedule.scored, true);
+  assert.deepEqual(app.event.rankOrder, ranks);
+  assert.equal(championAthlete(app.event).id, ranks[1]);
+  assert.equal(app.event.graphics.modules.results.visible, true);
+  assert.strictEqual(verifyState(app.state), app.state);
+  app.send('athlete:save', { id: ranks[1], fields: { name: '乙', result: 'DNF' } });
+  assert.equal(app.event.graphics.modules.results.visible, false);
+  assert.equal(app.event.championId, undefined);
+  assert.throws(() => app.send('champion:publish', { id: ranks[1] }), /有效的冠军选手/);
+});
+
+test('layout patches update only edited fields and a stale event switch is rejected', () => {
+  const app = session();
+  const first = app.event.id;
+  const second = app.state.events[1].id;
+  app.send('module:save', { key: 'brand', patch: { x: 314 } });
+  app.send('module:save', { key: 'brand', patch: { corner: '新的角标', opacity: 45 } });
+  assert.equal(app.event.graphics.meet.corner, '新的角标');
+  assert.equal(app.event.graphics.modules.brand.x, 314);
+  app.send('event:select', { eventId: second, fromEventId: first });
+  assert.throws(() => app.send('event:select', { eventId: first, fromEventId: first }), /当前赛事已切换/);
+  assert.throws(() => app.send('module:save', { eventId: first, key: 'brand', patch: { opacity: 10 } }), /当前赛事已切换/);
+  assert.equal(app.event.graphics.modules.brand.opacity, 100);
+  assert.equal(parseTime(formatTime(86_400_000)), 86_400_000);
 });
 
 test('default positions and the four corners fit the same guide rectangle', () => {
