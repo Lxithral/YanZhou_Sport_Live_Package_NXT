@@ -92,9 +92,12 @@
       <section class="panel focus-card" aria-labelledby="focus-title">
         <div class="focus-heading">
           <h2 id="focus-title" class="preview-label">局部放大</h2>
-          <span id="focus-status" class="focus-status"></span>
+          <div class="focus-tools">
+            <span id="focus-status" class="focus-status"></span>
+            <button type="button" class="button compact" id="focus-size" aria-pressed="false" aria-controls="focus-stage">放大查看</button>
+          </div>
         </div>
-        <div class="focus-stage" data-backdrop="grid">
+        <div class="focus-stage" id="focus-stage">
           <iframe id="focus-preview" title="选中图层局部放大" tabindex="-1"></iframe>
         </div>
       </section>

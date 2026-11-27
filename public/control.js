@@ -130,7 +130,14 @@ new ResizeObserver(([entry]) => {
 // 局部放大：focus 页只渲染选中图层（?focus=key），再按图层位置缩放居中
 const focusStage = document.querySelector('.focus-stage');
 const focusFrame = $('#focus-preview');
+const focusSize = $('#focus-size');
 let focusFrameKey = '';
+
+focusSize.addEventListener('click', () => {
+  const expanded = focusStage.closest('.monitor-column').classList.toggle('focus-expanded');
+  focusSize.setAttribute('aria-pressed', String(expanded));
+});
+
 function renderFocus() {
   if (!state) return;
   const key = layoutKey;
@@ -143,17 +150,18 @@ function renderFocus() {
   }
   $('#preview-selected').textContent = meta.title;
   $('#focus-title').textContent = `${meta.title} · 局部放大`;
-  const onAir = layout.visible && applicable(key, activeEvent(state));
+  const hasContent = moduleHasContent(key, activeEvent(state));
+  const onAir = layout.visible && hasContent;
   const status = $('#focus-status');
-  status.textContent = onAir ? '上屏中' : '未上屏 · 预览';
+  status.textContent = onAir ? '上屏中' : hasContent ? '未上屏' : '暂无内容';
   status.classList.toggle('is-live', onAir);
   const width = focusStage.clientWidth;
   const height = focusStage.clientHeight;
-  if (!width || !height) return;
+  if (width <= 32 || height <= 24) return;
   const { x, y } = modulePosition(key, layout);
   const w = meta.w * layout.scale / 100;
   const h = meta.h * layout.scale / 100;
-  const zoom = Math.min(width / (w * 1.6), height / (h * 1.6));
+  const zoom = Math.min((width - 32) / w, (height - 24) / h, 130 / layout.scale);
   focusFrame.style.width = `${(CANVAS.width * zoom).toFixed(1)}px`;
   focusFrame.style.height = `${(CANVAS.height * zoom).toFixed(1)}px`;
   focusFrame.style.left = `${(width / 2 - (x + w / 2) * zoom).toFixed(1)}px`;

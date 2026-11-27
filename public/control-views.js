@@ -1,4 +1,5 @@
 import { escapeHtml as h } from './client.js';
+import { medalIcon } from './medal.js';
 import { MODULES, MOTIONS, OUTPUT_LAYERS, applicable, canRank, championAthlete, eventTitle, formatTime, formatMark, moduleBounds, moduleHasContent, modulePosition, moduleScaleLimit, lineupRoster, paginatedCount, roster, resultText } from './sport.js';
 
 const PATHS = {
@@ -14,14 +15,14 @@ const PATHS = {
   edit: 'M13 5l6 6-9 9H4v-6zM12 6l6 6',
   trash: 'M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6',
   close: 'M6 6l12 12M18 6L6 18',
-  trophy: 'M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4zM7 5H4v2a3 3 0 0 0 3 3M17 5h3v2a3 3 0 0 1-3 3',
   down: 'M6 9l6 6 6-6',
   eye: 'M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   'eye-off': 'M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A9.6 9.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3 3.7M6.1 6.6A16.6 16.6 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 3.6-.7',
 };
 
 export function icon(key) {
-  return `<svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${PATHS[key] ?? PATHS.trophy}"/></svg>`;
+  if (key === 'medal') return medalIcon();
+  return `<svg class="icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="${PATHS[key]}"/></svg>`;
 }
 
 export function button(label, { action, key, value, glyph, variant = '', small = false, iconOnly = false, disabled = false, pressed, accessible } = {}) {
@@ -98,7 +99,7 @@ export function competitorPanel(event, { start, limit, drafts = new Map(), delet
         ${event.kind === 'ranking' ? `<span>${h(resultText(athlete, event))}</span>` : input(scoreName, scoreName === 'jumps' ? '跳高记录' : scoreName === 'attempts' ? '成绩 / 试次' : '成绩', `class="roster-score" maxlength="${scoreName === 'jumps' ? 1400 : scoreName === 'attempts' ? 128 : 24}" placeholder="${placeholder}"`)}
         <small id="roster-feedback-${h(athlete.id)}" class="roster-feedback${draft?.error ? ' error' : ''}" role="status" title="${h(draft?.error ?? '')}">${h(feedback)}</small>
       </td>
-      <td class="row-actions"><div>${button(onAir ? '下屏' : '播冠军', { action: 'champion', key: athlete.id, glyph: 'trophy', small: true, variant: onAir ? 'on-air' : '', pressed: onAir, disabled: blocked || !canRank(athlete), accessible: `${onAir ? '冠军下屏' : '播出冠军'} · ${athlete.name}` })}${button('删除', { action: 'athlete-delete', key: athlete.id, glyph: 'trash', small: true, iconOnly: true, disabled: blocked, accessible: `删除 ${athlete.name}` })}</div></td>
+      <td class="row-actions"><div>${button(onAir ? '下屏' : '播冠军', { action: 'champion', key: athlete.id, glyph: 'medal', small: true, variant: onAir ? 'on-air' : '', pressed: onAir, disabled: blocked || !canRank(athlete), accessible: `${onAir ? '冠军下屏' : '播出冠军'} · ${athlete.name}` })}${button('删除', { action: 'athlete-delete', key: athlete.id, glyph: 'trash', small: true, iconOnly: true, disabled: blocked, accessible: `删除 ${athlete.name}` })}</div></td>
     </tr>`;
   }).join('');
   return `<table>${head}<tbody>${body}</tbody></table>`;
@@ -150,7 +151,7 @@ export function moduleList(state, event, selected, online) {
             <span class="module-title">${h(meta.title)}</span>
             <span class="module-summary" title="${h(summary)}">${h(summary)}</span>
           </span>
-          <span class="module-locate" aria-hidden="true"><span class="module-meta">${position.x} · ${position.y} · ${layout.scale}%</span><span class="module-map"><span class="module-map-rect" style="left:${((position.x / 1920) * 100).toFixed(1)}%;top:${((position.y / 1080) * 100).toFixed(1)}%;width:${((meta.w * layout.scale / 100 / 1920) * 100).toFixed(1)}%;height:${((meta.h * layout.scale / 100 / 1080) * 100).toFixed(1)}%"></span></span></span>
+          <span class="module-map" aria-hidden="true"><span class="module-map-rect" style="left:${((position.x / 1920) * 100).toFixed(1)}%;top:${((position.y / 1080) * 100).toFixed(1)}%;width:${((meta.w * layout.scale / 100 / 1920) * 100).toFixed(1)}%;height:${((meta.h * layout.scale / 100 / 1080) * 100).toFixed(1)}%"></span></span>
         </button>
         <button type="button" class="module-toggle" data-action="module-toggle" data-key="${key}" aria-pressed="${live}" aria-label="${h(meta.title)}${live ? '下屏' : '上屏'}" ${online && allowed ? '' : 'disabled'}>${live ? '下屏' : '上屏'}</button>
         ${moduleControls(state, event, key, page, pages, allowed, online)}
@@ -232,9 +233,9 @@ export function inspector({ layout, key, corner, collapsed }) {
         <label class="field"><span>退场动画</span><select name="exit">${Object.entries(MOTIONS).map(([value, label]) => `<option value="${value}" ${layout.exit === value ? 'selected' : ''}>${h(label)}</option>`).join('')}</select></label>
         ${range('duration', '动画时长', layout.duration, 80, 2000, 'ms')}
       </div>`)}
-    ${key === 'brand' ? section('corner', '右下角角标', `
+    ${key === 'brand' ? section('corner', '左下角角标', `
       <div class="field-grid">
-        <label class="field field-wide"><span>角标文字</span><input name="corner" maxlength="12" value="${h(corner)}" placeholder="如 中山市烟洲中学"></label>
+        <label class="field field-wide"><span>校名</span><input name="corner" maxlength="12" value="${h(corner)}" placeholder="如 中山市烟洲中学"></label>
       </div>
       <p class="form-note">留空仅显示金色标志。</p>`) : ''}
   </form>`;

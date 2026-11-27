@@ -10,7 +10,7 @@ export const MODULES = {
   event:   { title: '赛事条', icon: 'list', corner: 'bl', w: 680, h: 112, visible: true },
   score:   { title: '球赛记分牌', icon: 'score', corner: 'tr', w: 660, h: 144, visible: true, kind: 'match' },
   lineup:  { title: '起跑介绍', icon: 'people', x: 240, y: 650, w: 1520, h: 280, visible: false },
-  results: { title: '冠军', icon: 'chart', x: 1460, y: 530, w: 340, h: 400, visible: false },
+  results: { title: '冠军', icon: 'medal', x: 1460, y: 530, w: 340, h: 400, visible: false },
   teams:   { title: '班级积分', icon: 'chart', x: 436, y: 220, w: 1048, h: 636, visible: false },
 };
 
