@@ -29,7 +29,7 @@
   </header>
   <nav class="mobile-nav" aria-label="工作区">
     <button type="button" data-action="workspace" data-key="work" aria-controls="work-panel" aria-pressed="true">选手名单</button>
-    <button type="button" data-action="workspace" data-key="output" aria-controls="preview-card output-panel" aria-pressed="false">监看与输出</button>
+    <button type="button" data-action="workspace" data-key="output" aria-controls="preview-card properties-column" aria-pressed="false">监看与输出</button>
   </nav>
   <main class="app-shell" data-workspace="work">
     <aside class="panel output-panel" id="properties-column" aria-label="画面输出">
@@ -38,8 +38,7 @@
         <span id="layer-count" class="badge" aria-label="上屏图层数量"></span>
       </div>
       <div class="output-scroll">
-        <section class="card layers-card" aria-labelledby="layers-title">
-          <div class="card-head"><h2 id="layers-title">上屏图层</h2><span class="hint">点选后在下方微调位置</span></div>
+        <section aria-label="上屏图层">
           <div id="module-list" class="module-list"></div>
         </section>
         <div id="layout-inspector" class="layout-inspector"></div>
@@ -50,6 +49,13 @@
         <h2>选手名单</h2>
       </div>
       <section id="competitors" class="roster-pane" aria-label="选手名单">
+        <form id="event-switch" class="event-switch">
+          <label for="event-picker">选择上屏赛事</label>
+          <div class="event-switch-controls">
+            <select id="event-picker" disabled><option>正在载入</option></select>
+            <button type="submit" id="take-event" class="button capture" disabled>切换赛事</button>
+          </div>
+        </form>
         <div class="prep-toolbar"><div id="roster-tools" class="roster-tools"></div></div>
         <div id="roster-editor" class="roster-editor"></div>
         <div id="roster-rows" class="roster-rows"></div>
@@ -61,9 +67,23 @@
         <div class="preview-live">
           <h2 id="preview-title" class="preview-label">画面监看</h2>
         </div>
+        <div class="preview-tools" role="group" aria-label="监看设置">
+          <button type="button" class="button compact" data-monitor="backdrop" aria-pressed="false">深灰底</button>
+          <button type="button" class="button compact" data-monitor="guides" aria-pressed="false">安全区</button>
+          <button type="button" class="button compact" data-monitor="edit" aria-pressed="false">拖动图层</button>
+        </div>
       </div>
       <div class="preview-stage" data-backdrop="grid">
         <div class="monitor-canvas"><iframe id="preview" title="OBS 画面预览"></iframe></div>
+        <p id="monitor-status" role="status">正在连接监看</p>
+      </div>
+      <div class="preview-footer">
+        <label class="obs-label" for="obs-url"><strong>OBS 浏览器源</strong><small>1920 × 1080 · 透明</small></label>
+        <div class="obs-actions">
+          <input type="url" id="obs-url" readonly>
+          <button type="button" id="copy-obs" class="button compact" aria-label="复制 OBS 输出地址">复制</button>
+          <a id="open-obs" class="button compact" href="/overlay.html" target="_blank" rel="noopener" aria-label="打开 OBS 输出页">打开</a>
+        </div>
       </div>
     </section>
   </main>

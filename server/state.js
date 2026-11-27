@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
   DIVISIONS, GRADES, KINDS, MAX_COMPETITORS, MODULES, MOTIONS, PRESETS, activeEvent, applicable,
-  canJump, canRank, clamp, defaultLayout, eventStage, inferDivision,
-  jumpFailures, jumpHeight, moduleBounds, moduleScaleLimit, nextJumpHeight, paginatedCount, parseMark, parseTime, relayRegistration, standings,
+  canJump, canRank, championAthlete, clamp, defaultLayout, eventStage, inferDivision,
+  jumpFailures, jumpHeight, lineupRoster, moduleBounds, moduleHasContent, moduleScaleLimit, nextJumpHeight, paginatedCount, parseMark, parseTime, relayRegistration, standings,
 } from '../public/sport.js';
 import { AWARD_LIMIT, SCHOOL_RACES, canScore, className, classStandings, finalFor, topRows } from '../public/meet-program.js';
 
@@ -115,6 +115,9 @@ export function verifyState(value) {
       const eligible = new Set(event.competitors.filter(canRank).map(({ id }) => id));
       requireThat(event.kind !== 'match' && Array.isArray(event.rankOrder) && new Set(event.rankOrder).size === event.rankOrder.length &&
         event.rankOrder.every((id) => eligible.has(id)), '手动排名记录损坏。');
+    }
+    if (event.championId !== undefined) {
+      requireThat(typeof event.championId === 'string' && championAthlete(event)?.id === event.championId, '冠军选手记录损坏。');
     }
     ids.add(event.id);
   }
@@ -381,13 +384,14 @@ function getRosterEvent(state, eventId) {
 
 function saveModule(state, { key, patch, eventId }) {
   requireThat(Object.hasOwn(MODULES, key) && object(patch), '包装模块不存在。');
-  const { modules, pages } = graphicsForActive(state, eventId);
+  const { meet, modules, pages } = graphicsForActive(state, eventId);
   const layout = modules[key];
   if (Object.hasOwn(patch, 'visible')) {
     requireThat(typeof patch.visible === 'boolean', '请指定显隐状态。');
     const event = activeEvent(state);
     if (patch.visible) {
       requireThat(applicable(key, event), '当前赛事不适用这个模块。');
+      requireThat(moduleHasContent(key, event), key === 'lineup' ? '请先添加本组的选手。' : '请先选择有效的冠军选手。');
       if (key === 'lineup') modules.event.visible = false;
       if (key === 'event') modules.lineup.visible = false;
       if (TABLE_KEYS.includes(key)) {
@@ -396,6 +400,10 @@ function saveModule(state, { key, patch, eventId }) {
       }
     }
     layout.visible = patch.visible;
+  }
+  if (Object.hasOwn(patch, 'corner')) {
+    requireThat(key === 'brand', '角标文字属于 Logo 挂角。');
+    meet.corner = text(patch.corner, 12, '角标文字');
   }
   if (Object.hasOwn(patch, 'scale')) layout.scale = integer(patch.scale, 35, moduleScaleLimit(key), '缩放');
   if (Object.hasOwn(patch, 'opacity')) layout.opacity = integer(patch.opacity, 0, 100, '透明度');
@@ -441,7 +449,10 @@ function moveRank(state, { eventId, id, beforeId = null }) {
 
 const commands = {
   'event:save': saveEvent,
-  'event:select'(state, { eventId }) { state.activeEventId = getEvent(state, eventId).id; },
+  'event:select'(state, { eventId, fromEventId }) {
+    graphicsForActive(state, fromEventId);
+    state.activeEventId = getEvent(state, eventId).id;
+  },
   'event:delete'(state, { eventId }) {
     const index = state.events.indexOf(getEvent(state, eventId));
     state.events.splice(index, 1);
@@ -470,17 +481,21 @@ const commands = {
   },
   'athlete:save'(state, { eventId, id, fields }) {
     const event = getRosterEvent(state, eventId);
+    const introId = lineupRoster(event)[event.graphics.pages.lineup]?.id;
     if (id) getAthlete(event, id);
     const athlete = readAthlete(fields, event, id || undefined);
     event.competitors = id ? event.competitors.map((row) => row.id === id ? athlete : row) : [...event.competitors, athlete];
     ensureRoster(event.competitors);
     pruneRanks(event);
+    restoreIntroSelection(event, introId);
   },
   'athlete:delete'(state, { eventId, id }) {
     const event = getRosterEvent(state, eventId);
+    const introId = lineupRoster(event)[event.graphics.pages.lineup]?.id;
     getAthlete(event, id);
     event.competitors = event.competitors.filter((athlete) => athlete.id !== id);
     pruneRanks(event);
+    restoreIntroSelection(event, introId);
   },
   'athlete:attempt'(state, { eventId, id, value, index }) {
     const event = getRosterEvent(state, eventId);
@@ -520,6 +535,13 @@ const commands = {
     const event = getRosterEvent(state, eventId);
     requireThat(canRank(getAthlete(event, id)), '该选手的成绩状态不能排入名次。');
     event.rankOrder = [id];
+  },
+  'champion:publish'(state, { eventId, id }) {
+    const event = getRosterEvent(state, eventId);
+    const athlete = id === undefined ? championAthlete(event) : getAthlete(event, id);
+    requireThat(athlete && canRank(athlete), '请先选择有效的冠军选手。');
+    event.championId = athlete.id;
+    saveModule(state, { eventId, key: 'results', patch: { visible: true } });
   },
   'rank:remove'(state, { eventId, id }) {
     const event = getRosterEvent(state, eventId);
@@ -571,13 +593,26 @@ const commands = {
   },
 };
 
+function restoreIntroSelection(event, introId) {
+  const index = lineupRoster(event).findIndex(({ id }) => id === introId);
+  if (index === -1) event.graphics.modules.lineup.visible = false;
+  else event.graphics.pages.lineup = index;
+}
+
 export function applyCommand(state, command, now) {
   requireThat(object(command) && Object.hasOwn(commands, command.action), '无法识别的操作。');
   const draft = structuredClone(state);
   commands[command.action](draft, command, now);
   if (RESULT_COMMANDS.has(command.action)) {
-    const schedule = getEvent(draft, command.eventId).schedule;
-    if (schedule) delete schedule.scored;
+    const event = getEvent(draft, command.eventId);
+    if (event.schedule) delete event.schedule.scored;
+    const results = event.graphics.modules.results;
+    if ((results.visible || event.championId) && !championAthlete(event)) {
+      results.visible = false;
+      delete event.championId;
+    } else if (results.visible && !championAthlete(getEvent(state, command.eventId))) {
+      results.visible = false;
+    }
   }
   for (const event of draft.events) clampBoardPages(event);
   draft.revision++;

@@ -6,13 +6,15 @@ const MAX_DURATION = 24 * 60 * 60 * 1000;
 export const MAX_COMPETITORS = 128;
 
 export const MODULES = {
-  brand:   { title: 'Logo 挂角', icon: 'image', corner: 'tl', w: 609, h: 118, visible: true },
+  brand:   { title: 'Logo 挂角', icon: 'image', corner: 'tl', w: 330, h: 82, visible: true },
   event:   { title: '赛事条', icon: 'list', corner: 'bl', w: 680, h: 112, visible: true },
   score:   { title: '球赛记分牌', icon: 'score', corner: 'tr', w: 660, h: 144, visible: true, kind: 'match' },
   lineup:  { title: '起跑介绍', icon: 'people', x: 240, y: 650, w: 1520, h: 280, visible: false },
   results: { title: '冠军', icon: 'chart', x: 1460, y: 530, w: 340, h: 400, visible: false },
   teams:   { title: '班级积分', icon: 'chart', x: 436, y: 220, w: 1048, h: 636, visible: false },
 };
+
+export const OUTPUT_LAYERS = ['brand', 'event', 'lineup', 'results'];
 
 export const KINDS = { track: '径赛', field: '田赛', match: '球赛', ranking: '团体' };
 export const DIVISIONS = { men: '男子', women: '女子', open: '公开' };
@@ -63,7 +65,7 @@ export function parseTime(source) {
     .replace(/秒/g, '\'')
     .replace(/'{1,2}/g, ':')
     .replace(/:+$/, '');
-  const colon = /^(\d{1,3}):(.+)$/.exec(value);
+  const colon = /^(\d{1,4}):(.+)$/.exec(value);
   const rest = colon ? colon[2] : value;
   const match = /^(\d{1,5})(?:[.:](\d{1,2}))?$/.exec(rest);
   if (!match) throw new Error('这个成绩看不懂，换一种写法试试，例如 73.5、1:13.5 或 1分13秒5。');
@@ -224,6 +226,19 @@ export function standings(event) {
     if (row.value !== null) row.rank = i && compareMarks(rows[i - 1], row, event) === 0 ? rows[i - 1].rank : i + 1;
   });
   return rows;
+}
+
+export function championAthlete(event) {
+  if (!event || event.kind === 'match') return undefined;
+  if (event.championId) return event.competitors.find((athlete) => athlete.id === event.championId && canRank(athlete));
+  return standings(event).find(({ rank }) => rank === 1)?.athlete;
+}
+
+export function moduleHasContent(key, event) {
+  if (!applicable(key, event)) return false;
+  if (key === 'lineup') return lineupRoster(event).length > 0;
+  if (key === 'results') return Boolean(championAthlete(event));
+  return true;
 }
 
 export function resultRows(event) {

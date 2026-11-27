@@ -101,6 +101,7 @@ test('preview loads the production renderer without WebSocket with only the left
 test('live output gives the champion card priority through its exit animation', async (t) => {
   const overlay = await renderOverlay(t, '', false);
   const snapshot = clientState(initialState(), true);
+  snapshot.events[0].competitors.push({ id: 'champion', name: '第一名', status: 'ok', time: 120000, attempts: [] });
   const bottom = overlay.node('branding-corner--br');
   overlay.receive(snapshot);
   assert.equal(bottom.hidden, false);
@@ -118,6 +119,9 @@ test('live output gives the champion card priority through its exit animation', 
   assert.equal(bottom.hidden, true);
   winner.animation.onfinish();
   assert.equal(bottom.hidden, false);
+  snapshot.modules.brand.opacity = 25;
+  overlay.receive(snapshot);
+  assert.equal(bottom.style.opacity, 0.25);
   snapshot.modules.brand.opacity = 0;
   overlay.receive(snapshot);
   assert.equal(bottom.hidden, true);

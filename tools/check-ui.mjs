@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { createApp } from '../server/server.js';
 import { initialState } from '../server/state.js';
-import { activeEvent } from '../public/sport.js';
+import { PRESETS, activeEvent, defaultLayout, safeAnchor } from '../public/sport.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const artifacts = path.join(root, 'dist', 'ui-review');
@@ -46,7 +46,7 @@ race.competitors = ['林浩宇', '陈子航', '陆晨曦', '吴思远', '苏乐�
 race.competitors[4].name = '阿卜杜拉甲';
 await writeFile(path.join(temporary, 'settings.json'), JSON.stringify(seed));
 
-const app = createApp({ dataDir: temporary });
+let app = createApp({ dataDir: temporary });
 const port = await app.listen(0);
 const base = 'http://127.0.0.1:' + port;
 const profile = await mkdtemp(path.join(tmpdir(), 'yanzhou-chromium-'));
@@ -58,7 +58,9 @@ let ws;
 let browserError;
 browser.on('error', error => { browserError = error; });
 const errors = [];
-const report = { base, dataDirectory: temporary, checks: [], screenshots: [] };
+const consoleIssues = [];
+let interruptingService = false;
+const report = { base, browser: path.basename(browserPath), dataDirectory: temporary, checks: [], screenshots: [] };
 try {
   let debugPort;
   for (let tries = 0; tries < 150; tries++) {
@@ -79,6 +81,12 @@ try {
       pending.delete(message.id);
       if (message.error) request?.reject(new Error(JSON.stringify(message.error))); else request?.resolve(message.result);
     } else if (message.method === 'Runtime.exceptionThrown') errors.push(message.params.exceptionDetails);
+    else if (message.method === 'Log.entryAdded') {
+      const { level, text, url } = message.params.entry;
+      const localSocket = text.includes('WebSocket connection') && text.includes(base.replace(/^http/, 'ws'));
+      const localRefusal = (url?.startsWith(base) || url?.startsWith(base.replace(/^http/, 'ws'))) && text.includes('net::ERR_CONNECTION_REFUSED');
+      if (['error', 'warning'].includes(level) && !(interruptingService && (localSocket || localRefusal))) consoleIssues.push({ text, url });
+    }
   });
   const cdp = (method, params = {}) => new Promise((resolve, reject) => {
     const id = ++serial;
@@ -108,6 +116,11 @@ try {
   const type = (selector, value) => evaluate('(() => { const node = document.querySelector(' + JSON.stringify(selector) + '); node.focus(); node.value = ' + JSON.stringify(value) + '; node.dispatchEvent(new Event("input", {bubbles: true})); return true; })()');
   const submit = selector => evaluate('document.querySelector(' + JSON.stringify(selector) + ').requestSubmit()');
   const click = selector => evaluate('document.querySelector(' + JSON.stringify(selector) + ').click()');
+  const select = (selector, value) => evaluate(`(() => {
+    const node = document.querySelector(${JSON.stringify(selector)});
+    node.value = ${JSON.stringify(value)};
+    node.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
   const pointerClick = async selector => {
     const point = await evaluate('(() => { const node = document.querySelector(' + JSON.stringify(selector) + '); node.scrollIntoView({block:"nearest"}); const rect = node.getBoundingClientRect(); return {x:rect.x+rect.width/2,y:rect.y+rect.height/2}; })()');
     await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...point });
@@ -132,25 +145,50 @@ try {
       else reject(new Error(message.error));
     });
   });
-  const checkGraphicText = async label => {
+  const checkGraphicText = async (label, selectors = ['.winner-name', '.winner-team', '.winner-time', '.eb-copy strong', '.eb-copy small']) => {
     const fitted = await evaluate(`(() => {
-      const selectors = ['.winner-name', '.winner-team', '.winner-time', '.eb-copy strong', '.eb-copy small'];
+      const selectors = ${JSON.stringify(selectors)};
       return selectors.map(selector => {
         const node = document.querySelector(selector);
         if (!node) return { selector, fits: true };
         const box = node.getBoundingClientRect();
         const parent = node.parentElement.getBoundingClientRect();
-        return { selector, fits: box.left >= parent.left - .5 && box.right <= parent.right + .5 && box.top >= parent.top - .5 && box.bottom <= parent.bottom + .5 && node.scrollWidth <= node.clientWidth + 1 };
+        const clip = node.closest('.winner-card, .event-banner, .intro-bar, .intro-stub, .branding-corner').getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const text = range.getBoundingClientRect();
+        const fitsParent = box.left >= parent.left - .5 && box.right <= parent.right + .5 && box.top >= parent.top - .5 && box.bottom <= parent.bottom + .5;
+        const fitsGraphic = text.left >= clip.left - .5 && text.right <= clip.right + .5 && text.top >= clip.top - .5 && text.bottom <= clip.bottom + .5;
+        return { selector, fits: fitsParent && fitsGraphic && node.scrollWidth <= node.clientWidth + 1 };
       });
     })()`);
     assert.ok(fitted.every(({ fits }) => fits), label + ' ' + JSON.stringify(fitted));
   };
 
   await cdp('Runtime.enable');
+  await cdp('Log.enable');
   await cdp('Page.enable');
   await viewport(1920, 1080);
   await cdp('Page.navigate', { url: base + '/control.html' });
   await until('document.querySelector("#connection")?.classList.contains("connection--online") && document.querySelector("#roster-seed-1-name")?.value === "林浩宇"', 'control connected');
+  assert.equal(await evaluate('location.pathname'), '/control.html');
+  assert.equal(await evaluate('document.title'), '烟洲体育导播台');
+  await until('document.querySelector("#monitor-status").hidden', 'monitor connected');
+  assert.equal(await evaluate('document.querySelector("#event-picker").options.length'), 4);
+  assert.equal(await evaluate('document.querySelector("#obs-url").value'), base + '/overlay.html');
+  assert.equal(await evaluate('document.querySelector("#open-obs").href'), base + '/overlay.html');
+  await cdp('Browser.grantPermissions', { origin: base, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
+  await cdp('Page.bringToFront');
+  await pointerClick('#copy-obs');
+  await until('document.querySelector("#toast").textContent === "OBS 输出地址已复制"', 'OBS URL copied');
+  assert.equal(await evaluate('navigator.clipboard.readText()'), base + '/overlay.html');
+  await click('[data-monitor="backdrop"]');
+  assert.equal(await evaluate('document.querySelector(".preview-stage").dataset.backdrop'), 'dark');
+  await click('[data-monitor="guides"]');
+  await until('document.querySelector("#preview").contentDocument.querySelector("#stage").classList.contains("guides")', 'preview safety guides enabled');
+  await click('[data-monitor="guides"]');
+  await click('[data-monitor="backdrop"]');
+  report.checks.push('The monitor switches its backdrop and guides, and the OBS button copies the full local output URL.');
 
   // 无头浏览器默认报告浅色系统主题，先固定成深色，保证截图可复现
   await click('[data-theme-option="dark"]');
@@ -259,19 +297,81 @@ try {
   // 2) 图层开关：起跑介绍上屏会替换冠军卡，下屏后回到 Logo。
   await click('[data-action="module-toggle"][data-key="lineup"]');
   await until('document.querySelector("#preview").contentDocument?.querySelector(".intro-name")?.textContent.length > 0', 'intro on air');
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument.querySelector(".layer--results").hidden'), true, 'replaced champion cuts before intro enters');
   assert.ok((await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".intro-team")?.textContent'))?.includes('1班'), 'intro shows the class under the title');
   assert.equal(await evaluate('document.querySelector("#preview").contentDocument?.querySelector(".intro-bib")'), null, 'bib removed from the intro');
   await screenshot('control-intro.png');
+  await pointerClick('.intro-controls [aria-label="下一位"]');
+  await until('document.querySelector("#preview").contentDocument.querySelector(".intro-name").textContent === "陈子航"', 'next introduction');
+  assert.equal(await evaluate('document.activeElement.getAttribute("aria-label")'), '下一位', 'next athlete control retains keyboard focus');
+  await sendCommand('athlete:save', { eventId: race.id, id: 'seed-1', fields: { name: '林浩宇', team: '1班', bib: '101', lane: '8', result: '2:05.00' } });
+  await until('document.querySelector("#lineup-picker").value === "0"', 'intro selection followed the athlete after a reorder');
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument.querySelector(".intro-name").textContent'), '陈子航');
+  await sendCommand('athlete:save', { eventId: race.id, id: 'seed-1', fields: { name: '林浩宇', team: '1班', bib: '101', lane: '1', result: '2:05.00' } });
   await click('[data-action="module-toggle"][data-key="lineup"]');
   await until('document.querySelector("#preview").contentDocument?.querySelectorAll(".layer:not([hidden])").length === 1', 'intro off air');
-  report.checks.push('Layer toggles put layers on air and take them off from the output column.');
+  report.checks.push('The intro replaces the champion, follows the selected athlete through reordering, and keeps next/previous keyboard access.');
 
   // 3) 布局设置即调即生效：改 X 后监看画面立即移动，无需应用按钮。
   await click('[data-action="module-select"][data-key="event"]');
   await until('document.querySelector("#layout-form") !== null', 'layout inspector rendered');
   await type('#layout-form [name="x"]', '300');
   await until('document.querySelector("#preview").contentDocument?.querySelector(".layer--event")?.style.left === "300px"', 'layout auto applied');
-  report.checks.push('Layout changes apply immediately without an apply button.');
+  await evaluate('document.querySelector("#layout-form [data-number=x]").focus()');
+  await sendCommand('module:save', { eventId: race.id, key: 'event', patch: { x: 420 } });
+  await until('document.querySelector("#preview").contentDocument.querySelector(".layer--event").style.left === "420px"', 'second controller updated X');
+  await evaluate('document.activeElement.blur()');
+  await pause(280);
+  assert.equal(await evaluate('document.querySelector("#layout-form [data-number=x]").value'), '420', 'clean blur cannot overwrite a concurrent edit');
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument.querySelector(".layer--event").style.left'), '420px');
+
+  const secondRace = seed.events[1];
+  await evaluate(`(async () => {
+    const socketUrl = new URL('/ws?role=control', location.href);
+    socketUrl.protocol = 'ws:';
+    const socket = new WebSocket(socketUrl);
+    await new Promise(resolve => socket.addEventListener('open', resolve, { once: true }));
+    const input = document.querySelector('#layout-form [data-number=x]');
+    input.focus();
+    input.value = '450';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    socket.send(JSON.stringify({ type: 'command', id: 'layout-race', command: { action: 'event:select', eventId: ${JSON.stringify(secondRace.id)} } }));
+    await new Promise(resolve => socket.addEventListener('message', function done(event) {
+      if (JSON.parse(event.data).id !== 'layout-race') return;
+      socket.removeEventListener('message', done);
+      resolve();
+    }));
+    socket.close();
+  })()`);
+  await until(`document.querySelector('#event-picker').value === ${JSON.stringify(secondRace.id)}`, 'second controller switched races');
+  await pause(280);
+  assert.equal(await evaluate('document.querySelector("#layout-form [data-number=x]").value'), String(defaultLayout('event').x));
+  await select('#event-picker', race.id);
+  assert.equal(await evaluate('document.querySelector("#event-picker").dataset.current'), secondRace.id, 'staged selection does not change the active race');
+  await pointerClick('#take-event');
+  await until(`document.querySelector('#event-picker').dataset.current === ${JSON.stringify(race.id)} && !document.querySelector('[data-action=layout-retry]').hidden`, 'layout draft retained for its original race');
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument.querySelector(".layer--event").style.left'), '420px');
+  await pointerClick('[data-action="layout-retry"]');
+  await until('document.querySelector("#preview").contentDocument.querySelector(".layer--event").style.left === "450px"', 'layout retry applied only to original race');
+  await click('[data-action="layout-anchor"][data-key="br"]');
+  const anchor = safeAnchor('event', 100, 'br');
+  await until(`document.querySelector('#layout-form [data-number=x]').value === '${anchor.x}' && document.querySelector('#layout-status').textContent === '布局已同步'`, 'event banner aligned to the safe corner');
+  await click('[data-action="layout-reset"]');
+  await until(`document.querySelector('#layout-form [data-number=x]').value === '${defaultLayout('event').x}' && document.querySelector('#layout-status').textContent === '布局已同步'`, 'event banner restored to its default position');
+  await click('[data-action="module-toggle"][data-key="event"]');
+  await until('!document.querySelector("#preview").contentDocument.querySelector(".layer--event").hidden', 'event banner ready for pointer drag');
+  const dragStart = await evaluate(`(() => {
+    const iframe = document.querySelector('#preview');
+    const frame = iframe.getBoundingClientRect();
+    const target = iframe.contentDocument.querySelector('.event-banner').getBoundingClientRect();
+    return { x: frame.x + target.x + target.width / 2, y: frame.y + target.y + target.height / 2 };
+  })()`);
+  await cdp('Input.dispatchMouseEvent', { type: 'mousePressed', button: 'left', clickCount: 1, ...dragStart });
+  const dragEnd = { x: dragStart.x + 30, y: dragStart.y - 12 };
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', button: 'left', buttons: 1, ...dragEnd });
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseReleased', button: 'left', clickCount: 1, ...dragEnd });
+  await until(`Number(document.querySelector('#layout-form [data-number=x]').value) > ${defaultLayout('event').x} && document.querySelector('#layout-status').textContent === '布局已同步'`, 'pointer drag saved the layout');
+  report.checks.push('Autosave, clean blur, race-scoped retry, corner alignment, reset, and pointer drag all preserve the active race layout.');
 
   // 3.5) 右下角角标文字：选中 Logo 挂角后在面板里改，监看立即更新。
   await evaluate('document.activeElement?.blur?.()');
@@ -350,21 +450,49 @@ try {
   assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(13, 14, 16)');
   report.checks.push('Theme switch flips between light and dark and persists the choice.');
 
+  await sendCommand('event:save', { fields: { ...PRESETS['run-1000'], name: '已存赛事', stage: '' } });
+  await until('document.querySelector("#live-event").textContent === "已存赛事"', 'legacy race is active');
+  await cdp('Page.reload');
+  await until('document.querySelector("#connection")?.classList.contains("connection--online") && document.querySelector("#live-event").textContent === "已存赛事"', 'reopening the dashboard keeps the active legacy race');
+  assert.equal(await evaluate('document.querySelector("#event-picker optgroup[label=其他已存赛事] option").textContent'), '已存赛事');
+  await click('[data-action="module-select"][data-key="event"]');
+  await until('document.querySelector("#monitor-status").hidden && !document.querySelector("#preview").contentDocument.querySelector(".layer--event").hidden', 'last on-air frame ready');
+  interruptingService = true;
+  await app.close();
+  await until(`!document.querySelector("#monitor-status").hidden && document.querySelector('[data-action="module-toggle"][data-key="event"]').disabled`, 'offline warning and live controls suspended');
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument.querySelector(".eb-copy strong").textContent'), '已存赛事');
+  await type('#layout-form [data-number="x"]', '251');
+  await until('document.querySelector("#layout-status").textContent.includes("连接恢复")', 'layout warning retained offline');
+  app = createApp({ dataDir: temporary });
+  await app.listen(port);
+  await until(`document.querySelector("#monitor-status").hidden && !document.querySelector('[data-action="layout-retry"]').disabled`, 'control and preview reconnected');
+  interruptingService = false;
+  assert.equal(await evaluate('document.querySelector("#preview").contentDocument.querySelector(".layer--event").style.left'), `${defaultLayout('event').x}px`);
+  await pointerClick('[data-action="layout-retry"]');
+  await until('document.querySelector("#preview").contentDocument.querySelector(".layer--event").style.left === "251px"', 'offline draft retried explicitly');
+  report.checks.push('A saved race stays active on reload, and a real server restart keeps the last frame and prevents writes before reconnect.');
+
   // 赛事条和冠军卡按实际输出检查文字、尺寸和透明背景。
   const savedState = JSON.parse(await readFile(path.join(temporary, 'settings.json'), 'utf8'));
   const reviewEvent = savedState.events.find(event => event.schedule?.grade === 'g2' && event.division === 'men');
-  await sendCommand('event:select', { eventId: reviewEvent.id });
-  await sendCommand('athlete:save', { eventId: reviewEvent.id, fields: { name: '张三', team: '高二2班', result: '3.13' } });
+  await select('#event-picker', reviewEvent.id);
+  await pointerClick('#take-event');
+  await until(`document.querySelector('#event-picker').dataset.current === ${JSON.stringify(reviewEvent.id)}`, 'upcoming race taken from the UI');
+  await sendCommand('athlete:save', { eventId: reviewEvent.id, fields: { name: '张三', team: '高二2班', result: '2:03.13' } });
   const reviewState = JSON.parse(await readFile(path.join(temporary, 'settings.json'), 'utf8'));
   const reviewWinner = activeEvent(reviewState).competitors.find(athlete => athlete.name === '张三');
-  await sendCommand('rank:champion', { eventId: reviewEvent.id, id: reviewWinner.id });
-  await sendCommand('module:save', { eventId: reviewEvent.id, key: 'results', patch: { visible: true } });
+  await until(`document.querySelector('[data-action="champion"][data-key="${reviewWinner.id}"]')`, 'champion publish button rendered');
+  await pointerClick('[data-action="champion"][data-key="' + reviewWinner.id + '"]');
   await until('document.querySelector("#preview").contentDocument?.querySelector(".winner-team")?.textContent === "高二2班"', 'champion class displayed');
+  assert.equal(await evaluate('getComputedStyle(document.querySelector("#preview").contentDocument.querySelector(".layer.is-editable")).zIndex'), 'auto', 'monitor editing keeps the production stacking order');
+  await click('[data-monitor="edit"]');
   await screenshot('control-graphics.png');
 
   await cdp('Page.navigate', { url: base + '/overlay.html' });
   await until('document.querySelector(".winner-name")?.textContent === "张三"', 'output graphics connected');
-  assert.equal(await evaluate('document.querySelector(".winner-time").textContent'), '00:03.13');
+  assert.equal(await evaluate('document.title'), '烟洲体育 · OBS 输出');
+  assert.equal(await evaluate('document.querySelector("#stage").classList.contains("guides")'), false, 'guides never enter the real output');
+  assert.equal(await evaluate('document.querySelector(".winner-time").textContent'), '02:03.13');
   assert.equal(await evaluate('document.querySelector(".winner-team").textContent'), '高二2班');
   assert.equal(await evaluate('document.querySelector(".winner-card").getBoundingClientRect().height'), 400);
   assert.equal(await evaluate('document.querySelector(".event-banner").getBoundingClientRect().height'), 112);
@@ -404,12 +532,28 @@ try {
   assert.equal(await evaluate('document.querySelector(".winner-team").textContent'), longTeam);
   await checkGraphicText('long names, titles and scores fit');
   await screenshot('overlay-long-text.png');
+  await sendCommand('module:save', { eventId: reviewEvent.id, key: 'lineup', patch: { visible: true, enter: 'none' } });
+  await until('document.querySelector(".intro-name")?.textContent === ' + JSON.stringify(longName), 'long lineup name rendered');
+  assert.equal(await evaluate('document.querySelector(".layer--results").hidden'), true, 'champion does not overlap the intro even during the transition');
+  assert.equal(await evaluate('document.querySelector(".intro-team").textContent'), longTeam);
+  await checkGraphicText('maximum-width intro text fits', ['.intro-name', '.intro-team', '.intro-kicker']);
+  await screenshot('overlay-long-intro.png');
+  await sendCommand('module:save', { eventId: reviewEvent.id, key: 'lineup', patch: { visible: false, exit: 'none' } });
+  await sendCommand('module:save', { eventId: reviewEvent.id, key: 'brand', patch: { corner: '中'.repeat(12), opacity: 35 } });
+  await until('document.querySelector(".branding-corner-text").textContent.length === 12 && !document.querySelector(".branding-corner").hidden', 'long corner caption rendered');
+  assert.ok(await evaluate('document.querySelector(".branding-corner-text").getBoundingClientRect().right < 1824'), 'caption stays inside title-safe area');
+  assert.equal(await evaluate('getComputedStyle(document.querySelector(".branding-corner")).opacity'), '0.35', 'corner opacity matches the Logo layer');
+  await checkGraphicText('long corner caption fits', ['.branding-corner-text']);
+  await sendCommand('module:save', { eventId: reviewEvent.id, key: 'event', patch: { visible: true, x: 1000, y: 898 } });
+  await until('document.querySelector(".branding-corner").hidden', 'collision includes the full width of the caption');
+  await sendCommand('champion:publish', { eventId: reviewEvent.id, id: reviewWinner.id });
   await sendCommand('athlete:save', { eventId: reviewEvent.id, id: reviewWinner.id, fields: { name: '张三', team: '高二2班', result: '' } });
   await until('document.querySelector(".winner-time")?.textContent === "—"', 'empty score displayed');
-  report.checks.push('Maximum-length names, classes, event titles and scores fit their graphics, including an empty score.');
+  report.checks.push('Maximum-length text fits the introduction, champion card, event banner and the corner caption, which also yields to nearby graphics.');
 
   assert.deepEqual(errors, [], 'no uncaught browser exceptions');
-  report.checks.push('No uncaught browser exceptions.');
+  assert.deepEqual(consoleIssues, [], 'no unexpected browser warnings or errors');
+  report.checks.push('No uncaught browser exceptions or unexpected console warnings.');
   await writeFile(path.join(artifacts, 'verification.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   await cdp('Browser.close');
